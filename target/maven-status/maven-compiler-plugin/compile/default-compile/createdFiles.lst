@@ -1,7 +1,14 @@
 proyecto1so\demo\MainA.class
 proyecto1so\datastructures\Queue.class
 proyecto1so\Proyecto1SO.class
+proyecto1so\datastructures\Compare.class
+proyecto1so\model\PCB.class
+proyecto1so\model\TaskType.class
 proyecto1so\demo\MainA$1.class
+proyecto1so\model\ProcessState.class
+proyecto1so\datastructures\OrderedQueue.class
+proyecto1so\datastructures\SingleLinkedList.class
+proyecto1so\model\PCB$1.class
+proyecto1so\demo\MainPCB.class
 proyecto1so\datastructures\SingleLinkedList$Visitor.class
 proyecto1so\datastructures\Node.class
-proyecto1so\datastructures\SingleLinkedList.class
