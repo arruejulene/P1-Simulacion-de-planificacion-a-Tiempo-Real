@@ -7,6 +7,7 @@ proyecto1so\memory\MemoryManager.class
 proyecto1so\memory\MemoryManager$1.class
 proyecto1so\datastructures\Node.class
 proyecto1so\demo\MainBlockedTest.class
+proyecto1so\demo\MainPart1.class
 proyecto1so\datastructures\Queue.class
 proyecto1so\demo\MainMemory.class
 proyecto1so\Proyecto1SO.class
@@ -18,6 +19,7 @@ proyecto1so\demo\MainGenerator.class
 proyecto1so\model\ProcessState.class
 proyecto1so\datastructures\OrderedQueue.class
 proyecto1so\datastructures\SingleLinkedList.class
+proyecto1so\demo\MainPart1$1.class
 proyecto1so\generator\ProcessGenerator.class
 proyecto1so\model\PCB$1.class
 proyecto1so\memory\SuspensionPolicy.class
