@@ -9,27 +9,45 @@ package proyecto1so.demo;
  * @author ani
  */
 
+import proyecto1so.clock.ClockListener;
 import proyecto1so.clock.GlobalClock;
 
 public class MainClockTest {
 
-    public static void main(String[] args) {
-        // 1) Crear reloj con tick de 1000 ms (1 segundo)
-        GlobalClock clock = new GlobalClock(1000);
+    public static void main(String[] args) throws InterruptedException {
 
-        // 2) Iniciar el thread del reloj
+        // Tick cada 500ms (0.5s). Cambia este valor si quieres más rápido/lento.
+        GlobalClock clock = new GlobalClock(500);
+
+        // Listener 1
+        clock.addListener(new ClockListener() {
+            @Override
+            public void onTick(int tick) {
+                System.out.println("[LISTENER-1] Tick recibido: " + tick);
+
+                // Detenemos en el tick 5
+                if (tick == 5) {
+                    System.out.println("[TEST] Pidiendo stopClock() en tick: " + tick);
+                    clock.stopClock();
+                }
+            }
+        });
+
+        // Listener 2 (solo para probar que soporta múltiples listeners)
+        clock.addListener(new ClockListener() {
+            @Override
+            public void onTick(int tick) {
+                System.out.println("[LISTENER-2] Tick recibido: " + tick);
+            }
+        });
+
+        // Iniciar el reloj (Thread)
         clock.start();
 
-        // 3) Dejarlo correr unos segundos y luego detenerlo (opcional pero recomendado)
-        try {
-            Thread.sleep(6000); // deja correr ~6 ticks
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // Esperar a que el thread termine (cuando se llame stopClock)
+        clock.join();
 
-        // 4) Detener el reloj y mostrar el tick final
-        clock.stopClock();
-        System.out.println("[TEST] Clock stopped at tick: " + clock.getCurrentTick());
+        System.out.println("[TEST] Clock thread terminó. Fin de prueba.");
     }
 }
 
