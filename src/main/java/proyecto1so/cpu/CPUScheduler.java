@@ -23,6 +23,7 @@ import proyecto1so.scheduler.SchedulerStrategy;
 
 public class CPUScheduler implements ClockListener {
 
+    // READY (cola propia)
     private final Queue<Process> readyQueue = new Queue<>();
 
     // Llegadas pendientes (ordenadas por arrivalTime) usando OrderedQueue propia
