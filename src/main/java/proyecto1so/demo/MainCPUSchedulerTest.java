@@ -19,33 +19,30 @@ public class MainCPUSchedulerTest {
 
     public static void main(String[] args) {
 
-        GlobalClock clock = new GlobalClock(500); // 500 ms por tick
+        GlobalClock clock = new GlobalClock(500);
         CPUScheduler cpu = new CPUScheduler();
 
-        // ✅ Agregar procesos ANTES de iniciar el reloj
-        cpu.addProcess(new Process("P1", 3));
-        cpu.addProcess(new Process("P2", 5));
-        cpu.addProcess(new Process("P3", 2));
+        cpu.addProcess(new Process("P1", 3, 1));
+        cpu.addProcess(new Process("P2", 5, 3));
+        cpu.addProcess(new Process("P3", 2, 5));
 
-        // ✅ Conectar CPU al reloj
         clock.addListener(cpu);
 
         System.out.println("[TEST] Iniciando reloj...");
         clock.start();
 
-        // Deja correr varios ticks para ver cambios
-        while (clock.getCurrentTick() < 15) {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) { }
+        // Espera hasta que termine todo (con un límite de seguridad)
+        while (!cpu.isAllDone() && clock.getCurrentTick() < 200) {
+            try { Thread.sleep(50); } catch (InterruptedException e) { }
         }
 
         System.out.println("[TEST] Deteniendo reloj...");
         clock.stopClock();
 
-        try {
-            clock.join();
-        } catch (InterruptedException e) { }
+        try { clock.join(); } catch (InterruptedException e) { }
+
+        // Reporte final
+        cpu.printReport();
 
         System.out.println("[TEST] Fin.");
     }
