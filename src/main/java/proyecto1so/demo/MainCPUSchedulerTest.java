@@ -31,7 +31,7 @@ public class MainCPUSchedulerTest {
         System.out.println("[TEST] Iniciando reloj...");
         clock.start();
 
-        // Espera hasta que termine todo (con un límite de seguridad)
+        
         while (!cpu.isAllDone() && clock.getCurrentTick() < 200) {
             try { Thread.sleep(50); } catch (InterruptedException e) { }
         }
@@ -41,7 +41,7 @@ public class MainCPUSchedulerTest {
 
         try { clock.join(); } catch (InterruptedException e) { }
 
-        // Reporte final
+        
         cpu.printReport();
 
         System.out.println("[TEST] Fin.");

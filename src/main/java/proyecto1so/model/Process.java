@@ -16,19 +16,19 @@ public class Process {
     private final int burstTime;
     private int remainingTime;
 
-    // NUEVO: tick en el que el proceso "llega" al sistema
+
     private final int arrivalTime;
 
-    // Opcional: métricas básicas
+
     private Integer firstRunTick = null;
     private Integer finishTick = null;
 
-    // Constructor viejo: arrivalTime por defecto = 0
+    
     public Process(String pid, int burstTime) {
         this(pid, burstTime, 0);
     }
 
-    // Constructor nuevo: permite arrivalTime
+
     public Process(String pid, int burstTime, int arrivalTime) {
         this.pid = pid;
         this.burstTime = burstTime;
