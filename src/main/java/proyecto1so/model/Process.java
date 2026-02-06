@@ -9,30 +9,75 @@ package proyecto1so.model;
  * @author ani
  */
 
+
 public class Process {
 
-    private String id;
+    private final String pid;
+    private final int burstTime;
     private int remainingTime;
 
-    public Process(String id, int time) {
-        this.id = id;
-        this.remainingTime = time;
+    // NUEVO: tick en el que el proceso "llega" al sistema
+    private final int arrivalTime;
+
+    // Opcional: métricas básicas
+    private Integer firstRunTick = null;
+    private Integer finishTick = null;
+
+    // Constructor viejo: arrivalTime por defecto = 0
+    public Process(String pid, int burstTime) {
+        this(pid, burstTime, 0);
     }
 
-    public void executeTick() {
-        remainingTime--;
-        System.out.println("    [Process " + id + "] tiempo restante: " + remainingTime);
+    // Constructor nuevo: permite arrivalTime
+    public Process(String pid, int burstTime, int arrivalTime) {
+        this.pid = pid;
+        this.burstTime = burstTime;
+        this.remainingTime = burstTime;
+        this.arrivalTime = arrivalTime;
+    }
+
+    public String getPid() {
+        return pid;
+    }
+
+    public int getBurstTime() {
+        return burstTime;
+    }
+
+    public int getRemainingTime() {
+        return remainingTime;
+    }
+
+    public int getArrivalTime() {
+        return arrivalTime;
+    }
+
+    public Integer getFirstRunTick() {
+        return firstRunTick;
+    }
+
+    public Integer getFinishTick() {
+        return finishTick;
     }
 
     public boolean isFinished() {
         return remainingTime <= 0;
     }
 
-    public String getId() {
-        return id;
+    // Consume 1 tick de CPU
+    public void consumeOneTick() {
+        if (remainingTime > 0) {
+            remainingTime--;
+        }
     }
 
-    public int getRemainingTime() {
-        return remainingTime;
+    public void markFirstRun(int tick) {
+        if (firstRunTick == null) {
+            firstRunTick = tick;
+        }
+    }
+
+    public void markFinish(int tick) {
+        finishTick = tick;
     }
 }
