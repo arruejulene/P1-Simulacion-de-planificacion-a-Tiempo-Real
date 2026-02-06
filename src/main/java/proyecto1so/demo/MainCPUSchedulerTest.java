@@ -15,31 +15,24 @@ import proyecto1so.cpu.CPUScheduler;
 
 public class MainCPUSchedulerTest {
 
-    public static void main(String[] args) {
-
-        GlobalClock clock = new GlobalClock(500); // 500 ms por tick
-        CPUScheduler cpu = new CPUScheduler();
-
-        clock.addListener(cpu);
+    public static void main(String[] args) throws InterruptedException {
 
         System.out.println("[TEST] Iniciando reloj...");
+
+        GlobalClock clock = new GlobalClock(500); // si te da error, me dices qué constructor tiene tu GlobalClock
+        CPUScheduler cpuScheduler = new CPUScheduler();
+
+        clock.addListener(cpuScheduler);
+
         clock.start();
 
-        // Deja correr 5 ticks
         while (clock.getCurrentTick() < 5) {
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException e) {
-            }
+            Thread.sleep(50);
         }
 
         System.out.println("[TEST] Deteniendo reloj...");
         clock.stopClock();
-
-        try {
-            clock.join();
-        } catch (InterruptedException e) {
-        }
+        clock.join();
 
         System.out.println("[TEST] Fin.");
     }
