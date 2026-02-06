@@ -10,7 +10,6 @@ package proyecto1so.cpu;
  */
 
 
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -20,28 +19,43 @@ import java.util.Queue;
 
 import proyecto1so.clock.ClockListener;
 import proyecto1so.model.Process;
+import proyecto1so.scheduler.RoundRobinStrategy;
+import proyecto1so.scheduler.SchedulerStrategy;
 
 public class CPUScheduler implements ClockListener {
 
-    private static final int QUANTUM = 2;
-
     private final Queue<Process> readyQueue = new ArrayDeque<>();
     private final List<Process> pendingArrivals = new ArrayList<>();
-
-    // NUEVO: lista para reporte final (en el orden que quieras)
     private final List<Process> allProcesses = new ArrayList<>();
 
     private Process currentProcess = null;
     private int quantumLeft = 0;
 
-    // NUEVO: métricas globales
     private int totalTicks = 0;
     private int busyTicks = 0;
+
+    // ✅ NUEVO: Strategy actual
+    private SchedulerStrategy strategy = new RoundRobinStrategy(2); // quantum=2 por defecto
+
+    // ✅ Permite cambiar algoritmo en runtime (más adelante lo usas en caliente)
+    public void setStrategy(SchedulerStrategy strategy) {
+        if (strategy == null) return;
+        this.strategy = strategy;
+
+        // Si hay proceso corriendo, definimos qué pasa:
+        // opción simple: mantener el proceso actual pero resetear quantum
+        if (currentProcess != null) {
+            quantumLeft = this.strategy.getQuantum();
+        }
+    }
+
+    public SchedulerStrategy getStrategy() {
+        return strategy;
+    }
 
     public void addProcess(Process p) {
         pendingArrivals.add(p);
         pendingArrivals.sort(Comparator.comparingInt(Process::getArrivalTime));
-
         allProcesses.add(p);
     }
 
@@ -61,21 +75,20 @@ public class CPUScheduler implements ClockListener {
 
     private void dispatchIfNeeded(int tick) {
         if (currentProcess == null && !readyQueue.isEmpty()) {
-            currentProcess = readyQueue.poll();
-            quantumLeft = QUANTUM;
+            currentProcess = strategy.selectNextProcess(readyQueue);
+            quantumLeft = strategy.getQuantum();
+
             currentProcess.markFirstRun(tick);
             System.out.println("[CPU] Tick " + tick + " -> Ejecutando: " + currentProcess.getPid());
         }
     }
 
     public boolean isAllDone() {
-        // Termina cuando no queda nada por llegar, nada en ready y nadie corriendo
         return pendingArrivals.isEmpty() && readyQueue.isEmpty() && currentProcess == null;
     }
 
     public void printReport() {
         System.out.println("\n================= REPORT =================");
-        // Ordena por PID para que sea bonito (opcional)
         allProcesses.sort(Comparator.comparing(Process::getPid));
 
         double sumWait = 0;
@@ -143,7 +156,7 @@ public class CPUScheduler implements ClockListener {
         // 4) Ejecutar 1 tick
         busyTicks++;
         currentProcess.consumeOneTick();
-        quantumLeft--;
+        if (quantumLeft > 0) quantumLeft--;
 
         System.out.println("    [Process " + currentProcess.getPid() + "] tiempo restante: " + currentProcess.getRemainingTime());
         System.out.println("[CPU] Tick " + tick + " -> " + currentProcess.getPid()
@@ -153,16 +166,18 @@ public class CPUScheduler implements ClockListener {
         // 5) Si terminó
         if (currentProcess.isFinished()) {
             currentProcess.markFinish(tick);
+            strategy.onProcessFinished(currentProcess);
             System.out.println("[CPU] " + currentProcess.getPid() + " terminó.");
+
             currentProcess = null;
             quantumLeft = 0;
             return;
         }
 
-        // 6) Quantum terminó -> reencola
-        if (quantumLeft == 0) {
+        // 6) Si se acabó el quantum (solo si el algoritmo usa quantum)
+        if (strategy.getQuantum() > 0 && quantumLeft == 0) {
             System.out.println("[CPU] Quantum terminado para " + currentProcess.getPid() + " -> reencolando");
-            readyQueue.add(currentProcess);
+            strategy.onQuantumExpired(currentProcess, readyQueue);
             currentProcess = null;
             quantumLeft = 0;
         }
