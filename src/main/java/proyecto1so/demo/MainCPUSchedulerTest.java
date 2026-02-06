@@ -10,8 +10,10 @@ package proyecto1so.demo;
  */
 
 
+
 import proyecto1so.clock.GlobalClock;
 import proyecto1so.cpu.CPUScheduler;
+import proyecto1so.model.Process;
 
 public class MainCPUSchedulerTest {
 
@@ -20,17 +22,22 @@ public class MainCPUSchedulerTest {
         GlobalClock clock = new GlobalClock(500); // 500 ms por tick
         CPUScheduler cpu = new CPUScheduler();
 
+        // ✅ Agregar procesos ANTES de iniciar el reloj
+        cpu.addProcess(new Process("P1", 3));
+        cpu.addProcess(new Process("P2", 5));
+        cpu.addProcess(new Process("P3", 2));
+
+        // ✅ Conectar CPU al reloj
         clock.addListener(cpu);
 
         System.out.println("[TEST] Iniciando reloj...");
         clock.start();
 
-        // Deja correr 5 ticks
-        while (clock.getCurrentTick() < 5) {
+        // Deja correr varios ticks para ver cambios
+        while (clock.getCurrentTick() < 15) {
             try {
                 Thread.sleep(50);
-            } catch (InterruptedException e) {
-            }
+            } catch (InterruptedException e) { }
         }
 
         System.out.println("[TEST] Deteniendo reloj...");
@@ -38,8 +45,7 @@ public class MainCPUSchedulerTest {
 
         try {
             clock.join();
-        } catch (InterruptedException e) {
-        }
+        } catch (InterruptedException e) { }
 
         System.out.println("[TEST] Fin.");
     }
