@@ -11,11 +11,12 @@ package proyecto1so.cpu;
 
 
 
-
+import java.util.concurrent.Semaphore;
 import proyecto1so.clock.ClockListener;
 import proyecto1so.datastructures.Compare;
 import proyecto1so.datastructures.OrderedQueue;
 import proyecto1so.datastructures.Queue;
+import proyecto1so.datastructures.SingleLinkedList;
 import proyecto1so.model.Process;
 import proyecto1so.model.ProcessState;
 import proyecto1so.scheduler.RoundRobinStrategy;
@@ -23,208 +24,191 @@ import proyecto1so.scheduler.SchedulerStrategy;
 
 public class CPUScheduler implements ClockListener {
 
-    // READY (cola propia)
+    
+    private final Semaphore mutex = new Semaphore(1, true);
+
+
     private final Queue<Process> readyQueue = new Queue<>();
 
-    // Llegadas pendientes (ordenadas por arrivalTime) usando OrderedQueue propia
-    private final OrderedQueue<Process> pendingArrivals = new OrderedQueue<>(
-        new Compare<Process>() {
-            @Override
-            public int compare(Process a, Process b) {
-                return a.getArrivalTime() - b.getArrivalTime();
-            }
-        }
-    );
 
-    // Para reporte final (guardamos todos los procesos en una cola propia y rotamos)
-    private final Queue<Process> allProcesses = new Queue<>();
-    private int allCount = 0;
+    private final OrderedQueue<Process> pendingArrivals = new OrderedQueue<>(new Compare<Process>() {
+        @Override
+        public int compare(Process a, Process b) {
+            return a.getArrivalTime() - b.getArrivalTime();
+        }
+    });
+
+
+    private final SingleLinkedList<Process> finished = new SingleLinkedList<>();
+
+
+    private SchedulerStrategy strategy = new RoundRobinStrategy(2);
 
     private Process currentProcess = null;
     private int quantumLeft = 0;
 
+
     private int totalTicks = 0;
     private int busyTicks = 0;
 
-    // Strategy actual (por defecto RR quantum=2)
-    private SchedulerStrategy strategy = new RoundRobinStrategy(2);
+    
 
     public void setStrategy(SchedulerStrategy strategy) {
-        if (strategy == null) return;
-        this.strategy = strategy;
-
-        // Si hay proceso corriendo, reseteamos quantum según nuevo algoritmo
-        if (currentProcess != null) {
-            quantumLeft = this.strategy.getQuantum();
+        if (strategy != null) {
+            this.strategy = strategy;
         }
-    }
-
-    public SchedulerStrategy getStrategy() {
-        return strategy;
     }
 
     public void addProcess(Process p) {
-        // Asegurar estado inicial (por si lo crearon distinto)
-        p.setState(ProcessState.NEW);
+        if (p == null) return;
 
-        // llega a la estructura ordenada por arrival
-        pendingArrivals.insertOrdered(p);
-
-        // para el reporte
-        allProcesses.enqueue(p);
-        allCount++;
-    }
-
-    private void enqueueArrivals(int tick) {
-        // mientras el primero en pendingArrivals ya debería haber llegado, pásalo a READY
-        while (!pendingArrivals.isEmpty()) {
-            Process next = pendingArrivals.peek();
-            if (next == null) break;
-
-            if (next.getArrivalTime() <= tick) {
-                Process arrived = pendingArrivals.dequeue();
-
-                // ✅ NEW -> READY
-                arrived.setState(ProcessState.READY);
-
-                readyQueue.enqueue(arrived);
-                System.out.println("[CPU] Tick " + tick + " -> Llega: " + arrived.getPid());
-            } else {
-                break;
-            }
+        
+        Process toInsert = p;
+        if (p.getArrivalTime() <= 0) {
+            int arrival = 1 + (pendingArrivals.size() * 2);
+            toInsert = new Process(p.getPid(), p.getBurstTime(), arrival);
         }
+
+        pendingArrivals.insertOrdered(toInsert);
     }
 
-    private void dispatchIfNeeded(int tick) {
-        if (currentProcess != null) return;
-
-        currentProcess = strategy.selectNextProcess(readyQueue);
-        if (currentProcess == null) return;
-
-        // ✅ READY -> RUNNING
-        currentProcess.setState(ProcessState.RUNNING);
-
-        quantumLeft = strategy.getQuantum();
-        currentProcess.markFirstRun(tick);
-
-        System.out.println("[CPU] Tick " + tick + " -> Ejecutando: " + currentProcess.getPid());
-    }
-
-    public boolean isAllDone() {
-        return pendingArrivals.isEmpty() && currentProcess == null && readyQueue.peek() == null;
-    }
+   
 
     @Override
     public void onTick(int tick) {
-        totalTicks++;
+        try {
+            mutex.acquire();
 
-        // 1) Llegadas
-        enqueueArrivals(tick);
+            totalTicks = tick;
 
-        // 2) Dispatch si no hay proceso corriendo
-        dispatchIfNeeded(tick);
+           
+            while (!pendingArrivals.isEmpty() && pendingArrivals.peek().getArrivalTime() <= tick) {
+                Process arriving = pendingArrivals.dequeue();
+                arriving.setState(ProcessState.READY);
+                readyQueue.enqueue(arriving);
+                System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid());
+            }
 
-        // 3) IDLE
-        if (currentProcess == null) {
-            System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos)");
-            return;
-        }
+           
+            if (currentProcess == null) {
+                currentProcess = strategy.selectNextProcess(readyQueue);
 
-        // 4) Ejecutar 1 tick
-        busyTicks++;
-        currentProcess.consumeOneTick();
+                if (currentProcess != null) {
+                    currentProcess.setState(ProcessState.RUNNING);
+                    currentProcess.markFirstRun(tick);
 
-        // quantum solo si aplica
-        if (quantumLeft > 0) quantumLeft--;
+                    quantumLeft = strategy.getQuantum();
+                    System.out.println("[CPU] Tick " + tick + " -> Ejecutando: " + currentProcess.getPid());
+                } else {
+                    
+                    if (pendingArrivals.isEmpty()) {
+                        System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos)");
+                    }
+                    return;
+                }
+            }
 
-        System.out.println("    [Process " + currentProcess.getPid() + "] tiempo restante: " + currentProcess.getRemainingTime());
-        System.out.println("[CPU] Tick " + tick + " -> " + currentProcess.getPid()
-                + " restante=" + currentProcess.getRemainingTime()
-                + " quantumLeft=" + quantumLeft);
+            
+            busyTicks++;
 
-        // 5) Si terminó
-        if (currentProcess.isFinished()) {
-            currentProcess.markFinish(tick);
+            currentProcess.consumeOneTick();
+            System.out.println("    [Process " + currentProcess.getPid() + "] tiempo restante: " + currentProcess.getRemainingTime());
 
-            // ✅ RUNNING -> TERMINATED
-            currentProcess.setState(ProcessState.TERMINATED);
+            
+            if (quantumLeft != Integer.MAX_VALUE) {
+                quantumLeft--;
+            }
 
-            strategy.onProcessFinished(currentProcess);
-            System.out.println("[CPU] " + currentProcess.getPid() + " terminó.");
+            System.out.println("[CPU] Tick " + tick + " -> " + currentProcess.getPid()
+                    + " restante=" + currentProcess.getRemainingTime()
+                    + " quantumLeft=" + (quantumLeft == Integer.MAX_VALUE ? "INF" : quantumLeft));
 
-            currentProcess = null;
-            quantumLeft = 0;
-            return;
-        }
+            
+            if (currentProcess.isFinished()) {
+                currentProcess.markFinish(tick);
+                currentProcess.setState(ProcessState.TERMINATED);
 
-        // 6) Si se acabó el quantum (solo si el algoritmo usa quantum)
-        if (strategy.getQuantum() > 0 && quantumLeft == 0) {
-            // Si se reencola, vuelve a READY
-            currentProcess.setState(ProcessState.READY);
+                System.out.println("[CPU] " + currentProcess.getPid() + " terminó.");
+                finished.addLast(currentProcess);
 
-            System.out.println("[CPU] Quantum terminado para " + currentProcess.getPid() + " -> reencolando");
-            strategy.onQuantumExpired(currentProcess, readyQueue);
+                currentProcess = null;
+            } else if (quantumLeft == 0) {
+                currentProcess.setState(ProcessState.READY);
+                readyQueue.enqueue(currentProcess);
 
-            currentProcess = null;
-            quantumLeft = 0;
+                System.out.println("[CPU] Quantum terminado para " + currentProcess.getPid() + " -> reencolando");
+                currentProcess = null;
+            }
+
+        } catch (InterruptedException e) {
+           
+        } finally {
+            mutex.release();
         }
     }
+
+
 
     public void printReport() {
         System.out.println("\n================= REPORT =================");
 
-        double sumWait = 0;
-        double sumTurn = 0;
-        double sumResp = 0;
+   
+        SingleLinkedList<Process> temp = new SingleLinkedList<>();
 
-        int finishedCount = 0;
+        int count = 0;
+        double sumWaiting = 0;
+        double sumTurnaround = 0;
+        double sumResponse = 0;
 
-        // Rotamos la cola allProcesses para poder recorrerla sin perder datos
-        for (int i = 0; i < allCount; i++) {
-            Process p = allProcesses.dequeue();
-            allProcesses.enqueue(p);
+        while (!finished.isEmpty()) {
+            Process p = finished.removeFirst();
+            temp.addLast(p);
 
-            Integer finish = p.getFinishTick();
+            int arrival = p.getArrivalTime();
+            int burst = p.getBurstTime();
             Integer firstRun = p.getFirstRunTick();
+            Integer finish = p.getFinishTick();
 
-            if (finish == null || firstRun == null) {
-                System.out.println(p.getPid() + " -> NO terminó o no corrió (finish/firstRun null)");
-                continue;
-            }
+            if (firstRun == null) firstRun = arrival;
+            if (finish == null) finish = totalTicks;
 
-            int turnaround = finish - p.getArrivalTime() + 1;
-            int waiting = turnaround - p.getBurstTime();
-            int response = firstRun - p.getArrivalTime();
+           
+            int turnaround = finish - arrival + 1;
+            int response = firstRun - arrival;
+            int waiting = turnaround - burst;
 
-            sumWait += waiting;
-            sumTurn += turnaround;
-            sumResp += response;
-            finishedCount++;
+            sumTurnaround += turnaround;
+            sumResponse += response;
+            sumWaiting += waiting;
+            count++;
 
-            System.out.println(
-                p.getPid()
-                + " | arrival=" + p.getArrivalTime()
-                + " burst=" + p.getBurstTime()
-                + " firstRun=" + firstRun
-                + " finish=" + finish
-                + " | response=" + response
-                + " waiting=" + waiting
-                + " turnaround=" + turnaround
-                + " | state=" + p.getState()
-            );
+            System.out.println(p.getPid()
+                    + " | arrival=" + arrival
+                    + " burst=" + burst
+                    + " firstRun=" + firstRun
+                    + " finish=" + finish
+                    + " | response=" + response
+                    + " waiting=" + waiting
+                    + " turnaround=" + turnaround
+                    + " | state=" + p.getState());
         }
 
-        double utilization = (totalTicks == 0) ? 0 : (100.0 * busyTicks / totalTicks);
-
-        double avgWait = (finishedCount == 0) ? 0 : (sumWait / finishedCount);
-        double avgTurn = (finishedCount == 0) ? 0 : (sumTurn / finishedCount);
-        double avgResp = (finishedCount == 0) ? 0 : (sumResp / finishedCount);
+    
+        while (!temp.isEmpty()) {
+            finished.addLast(temp.removeFirst());
+        }
 
         System.out.println("------------------------------------------");
         System.out.println("Total ticks: " + totalTicks + " | Busy ticks: " + busyTicks);
-        System.out.printf("CPU Utilization: %.2f%%\n", utilization);
-        System.out.printf("Avg Waiting: %.2f | Avg Turnaround: %.2f | Avg Response: %.2f\n",
-                avgWait, avgTurn, avgResp);
+
+        double util = (totalTicks == 0) ? 0.0 : ((double) busyTicks / (double) totalTicks) * 100.0;
+        System.out.printf("CPU Utilization: %.2f%%%n", util);
+
+        if (count > 0) {
+            System.out.printf("Avg Waiting: %.2f | Avg Turnaround: %.2f | Avg Response: %.2f%n",
+                    (sumWaiting / count), (sumTurnaround / count), (sumResponse / count));
+        }
+
         System.out.println("==========================================\n");
     }
 }

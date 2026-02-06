@@ -10,6 +10,8 @@ package proyecto1so.scheduler;
  */
 
 
+
+
 import proyecto1so.datastructures.Queue;
 import proyecto1so.model.Process;
 
@@ -17,21 +19,11 @@ public class FCFSStrategy implements SchedulerStrategy {
 
     @Override
     public Process selectNextProcess(Queue<Process> readyQueue) {
-        return readyQueue.dequeue(); // primero en llegar, primero en salir
+        return readyQueue.dequeue();
     }
 
     @Override
     public int getQuantum() {
-        return 0; // FCFS no usa quantum
-    }
-
-    @Override
-    public void onQuantumExpired(Process p, Queue<Process> readyQueue) {
-        // No aplica en FCFS
-    }
-
-    @Override
-    public void onProcessFinished(Process p) {
-        // No requiere nada especial
+        return Integer.MAX_VALUE; // FCFS no usa quantum
     }
 }
