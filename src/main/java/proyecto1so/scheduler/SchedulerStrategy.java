@@ -9,20 +9,13 @@ package proyecto1so.scheduler;
  * @author ani
  */
 
-import java.util.Queue;
+
+import proyecto1so.datastructures.Queue;
 import proyecto1so.model.Process;
 
 public interface SchedulerStrategy {
-
-    
     Process selectNextProcess(Queue<Process> readyQueue);
-
-    
     int getQuantum();
-
-    
     void onQuantumExpired(Process p, Queue<Process> readyQueue);
-
-    
     void onProcessFinished(Process p);
 }

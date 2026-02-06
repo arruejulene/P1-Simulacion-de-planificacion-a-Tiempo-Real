@@ -10,7 +10,7 @@ package proyecto1so.scheduler;
  */
 
 
-import java.util.Queue;
+import proyecto1so.datastructures.Queue;
 import proyecto1so.model.Process;
 
 public class RoundRobinStrategy implements SchedulerStrategy {
@@ -23,7 +23,7 @@ public class RoundRobinStrategy implements SchedulerStrategy {
 
     @Override
     public Process selectNextProcess(Queue<Process> readyQueue) {
-        return readyQueue.poll();
+        return readyQueue.dequeue(); // tu Queue propia
     }
 
     @Override
@@ -33,13 +33,12 @@ public class RoundRobinStrategy implements SchedulerStrategy {
 
     @Override
     public void onQuantumExpired(Process p, Queue<Process> readyQueue) {
-        // RR: reencola al final
-        readyQueue.add(p);
+        // RR: vuelve al final
+        readyQueue.enqueue(p);
     }
 
     @Override
     public void onProcessFinished(Process p) {
-        // RR no necesita nada aquí
+        // RR no necesita acción extra
     }
 }
-
