@@ -14,34 +14,52 @@ package proyecto1so.demo;
 import proyecto1so.clock.GlobalClock;
 import proyecto1so.cpu.CPUScheduler;
 import proyecto1so.model.Process;
+import proyecto1so.scheduler.FCFSStrategy;
 
 public class MainCPUSchedulerTest {
 
     public static void main(String[] args) {
 
+        
         GlobalClock clock = new GlobalClock(500);
+
+       
         CPUScheduler cpu = new CPUScheduler();
+
+       
+       
+        cpu.setStrategy(new FCFSStrategy());
+
+ 
+
 
         cpu.addProcess(new Process("P1", 3, 1));
         cpu.addProcess(new Process("P2", 5, 3));
         cpu.addProcess(new Process("P3", 2, 5));
+
 
         clock.addListener(cpu);
 
         System.out.println("[TEST] Iniciando reloj...");
         clock.start();
 
-        
+       
         while (!cpu.isAllDone() && clock.getCurrentTick() < 200) {
-            try { Thread.sleep(50); } catch (InterruptedException e) { }
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+            }
         }
 
         System.out.println("[TEST] Deteniendo reloj...");
         clock.stopClock();
 
-        try { clock.join(); } catch (InterruptedException e) { }
+        try {
+            clock.join();
+        } catch (InterruptedException e) {
+        }
 
-        
+
         cpu.printReport();
 
         System.out.println("[TEST] Fin.");
