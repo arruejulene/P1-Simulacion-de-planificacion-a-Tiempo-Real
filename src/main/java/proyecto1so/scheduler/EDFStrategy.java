@@ -20,7 +20,7 @@ public class EDFStrategy implements SchedulerStrategy {
 
     @Override
     public int getQuantum() {
-        return Integer.MAX_VALUE; // EDF no usa quantum
+        return Integer.MAX_VALUE; 
     }
 
     @Override
@@ -36,15 +36,15 @@ public class EDFStrategy implements SchedulerStrategy {
             }
         });
 
-        // Pasar todo a ordered
+        
         while (!readyQueue.isEmpty()) {
             ordered.insertOrdered(readyQueue.dequeue());
         }
 
-        // Sacar el mejor
+        
         Process next = ordered.dequeue();
 
-        // ✅ IMPORTANTÍSIMO: devolver el resto a readyQueue para no perderlos
+        
         while (!ordered.isEmpty()) {
             readyQueue.enqueue(ordered.dequeue());
         }

@@ -21,11 +21,10 @@ public class Process {
 
     private final int arrivalTime;
 
-    // Menor número = más prioridad
+    
     private final int priority;
 
-    // EDF: deadline absoluto en ticks (ej: deadlineTick = 10)
-    // Si no aplica, puedes dejarlo en Integer.MAX_VALUE
+    
     private final int deadlineTick;
 
     private ProcessState state = ProcessState.NEW;
@@ -33,7 +32,7 @@ public class Process {
     private Integer firstRunTick = null;
     private Integer finishTick = null;
 
-    // Compatibilidad (sin arrival/priority/deadline)
+    
     public Process(String pid, int burstTime) {
         this(pid, burstTime, 0, 5, Integer.MAX_VALUE);
     }
@@ -42,12 +41,12 @@ public class Process {
         this(pid, burstTime, arrivalTime, 5, Integer.MAX_VALUE);
     }
 
-    // Compatibilidad (con priority pero sin deadline)
+    
     public Process(String pid, int burstTime, int arrivalTime, int priority) {
         this(pid, burstTime, arrivalTime, priority, Integer.MAX_VALUE);
     }
 
-    // ✅ Constructor completo EDF
+    
     public Process(String pid, int burstTime, int arrivalTime, int priority, int deadlineTick) {
         this.pid = pid;
         this.burstTime = burstTime;
@@ -69,7 +68,7 @@ public class Process {
 
     public int getDeadlineTick() { return deadlineTick; }
 
-    // “Cuenta regresiva” para EDF (útil para UI/logs)
+
     public int getDeadlineRemaining(int currentTick) {
         if (deadlineTick == Integer.MAX_VALUE) return Integer.MAX_VALUE;
         return deadlineTick - currentTick;
