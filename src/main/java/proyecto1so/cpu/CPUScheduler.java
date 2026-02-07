@@ -1,5 +1,8 @@
 package proyecto1so.cpu;
 
+
+
+
 import java.util.concurrent.Semaphore;
 import proyecto1so.clock.ClockListener;
 import proyecto1so.datastructures.Compare;
@@ -49,7 +52,7 @@ public class CPUScheduler implements ClockListener {
     public void addProcess(Process p) {
         if (p == null) return;
 
-        // Si arrival <= 0, asigna arrival escalonado preservando priority/deadline
+       
         if (p.getArrivalTime() <= 0) {
             int arrival = 1 + (pendingArrivals.size() * 2);
             p = new Process(
@@ -70,7 +73,7 @@ public class CPUScheduler implements ClockListener {
             mutex.acquire();
             totalTicks = tick;
 
-            // 1) Llegadas -> READY
+            
             while (!pendingArrivals.isEmpty() && pendingArrivals.peek().getArrivalTime() <= tick) {
                 Process arriving = pendingArrivals.dequeue();
                 arriving.setState(ProcessState.READY);
@@ -78,7 +81,7 @@ public class CPUScheduler implements ClockListener {
                 System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid());
             }
 
-            // 2) PREEMPCIÓN (Priority / SRT / EDF)
+
             if (currentProcess != null && shouldPreempt(currentProcess)) {
                 System.out.println("[CPU] PREEMPT -> Sale: " + currentProcess.getPid() + " (vuelve a READY)");
                 currentProcess.setState(ProcessState.READY);
@@ -86,7 +89,7 @@ public class CPUScheduler implements ClockListener {
                 currentProcess = null;
             }
 
-            // 3) Seleccionar siguiente si no hay proceso corriendo
+            
             if (currentProcess == null) {
                 currentProcess = strategy.selectNextProcess(readyQueue);
 
@@ -101,24 +104,24 @@ public class CPUScheduler implements ClockListener {
                 }
             }
 
-            // 4) Ejecutar 1 tick
+            
             busyTicks++;
             currentProcess.consumeOneTick();
             System.out.println("    [Process " + currentProcess.getPid() + "] tiempo restante: " + currentProcess.getRemainingTime());
 
-            // 5) Quantum (si aplica)
+            
             if (quantumLeft != Integer.MAX_VALUE) quantumLeft--;
 
             System.out.println("[CPU] Tick " + tick + " -> " + currentProcess.getPid()
                     + " restante=" + currentProcess.getRemainingTime()
                     + " quantumLeft=" + (quantumLeft == Integer.MAX_VALUE ? "INF" : quantumLeft));
 
-            // 6) Finaliza / quantum expira
+            
             if (currentProcess.isFinished()) {
                 currentProcess.markFinish(tick);
                 currentProcess.setState(ProcessState.TERMINATED);
 
-                // EDF: evaluar deadline si existe
+                
                 if (currentProcess.getDeadlineTick() != Integer.MAX_VALUE) {
                     if (tick <= currentProcess.getDeadlineTick()) deadlinesMet++;
                     else deadlinesMissed++;
@@ -136,13 +139,13 @@ public class CPUScheduler implements ClockListener {
             }
 
         } catch (InterruptedException e) {
-            // ignore
+            
         } finally {
             mutex.release();
         }
     }
 
-    // -------- PREEMPCIÓN --------
+    
 
     private boolean shouldPreempt(Process current) {
         if (readyQueue.isEmpty()) return false;
@@ -226,7 +229,7 @@ public class CPUScheduler implements ClockListener {
         return a.getPid().compareTo(b.getPid()) < 0;
     }
 
-    // -------- REPORT --------
+    
 
     public void printReport() {
         System.out.println("\n================= REPORT =================");
@@ -278,6 +281,11 @@ public class CPUScheduler implements ClockListener {
 
         double util = (totalTicks == 0) ? 0.0 : ((double) busyTicks / (double) totalTicks) * 100.0;
         System.out.printf("CPU Utilization: %.2f%%%n", util);
+
+        
+        double throughput = (totalTicks == 0) ? 0.0 : ((double) count / (double) totalTicks);
+        System.out.printf("Throughput: %.4f procesos/tick (%d procesos en %d ticks)%n",
+                throughput, count, totalTicks);
 
         if (count > 0) {
             System.out.printf("Avg Waiting: %.2f | Avg Turnaround: %.2f | Avg Response: %.2f%n",
