@@ -11,6 +11,7 @@ package proyecto1so.scheduler;
 
 
 
+
 import proyecto1so.datastructures.Compare;
 import proyecto1so.datastructures.OrderedQueue;
 import proyecto1so.datastructures.Queue;
@@ -20,12 +21,12 @@ public class SRTStrategy implements SchedulerStrategy {
 
     @Override
     public int getQuantum() {
-        return Integer.MAX_VALUE; 
+        return Integer.MAX_VALUE;
     }
 
     @Override
     public Process selectNextProcess(Queue<Process> readyQueue) {
-        if (readyQueue.isEmpty()) return null;
+        if (readyQueue == null || readyQueue.isEmpty()) return null;
 
         OrderedQueue<Process> ordered = new OrderedQueue<>(new Compare<Process>() {
             @Override
@@ -40,7 +41,13 @@ public class SRTStrategy implements SchedulerStrategy {
             ordered.insertOrdered(readyQueue.dequeue());
         }
 
-        return ordered.dequeue();
+        Process next = ordered.dequeue();
+
+        while (!ordered.isEmpty()) {
+            readyQueue.enqueue(ordered.dequeue());
+        }
+
+        return next;
     }
 }
 

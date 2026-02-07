@@ -28,7 +28,6 @@ public class PriorityPreemptiveStrategy implements SchedulerStrategy {
     public Process selectNextProcess(Queue<Process> readyQueue) {
         if (readyQueue == null || readyQueue.isEmpty()) return null;
 
-        
         OrderedQueue<Process> ordered = new OrderedQueue<>(new Compare<Process>() {
             @Override
             public int compare(Process a, Process b) {
@@ -42,6 +41,12 @@ public class PriorityPreemptiveStrategy implements SchedulerStrategy {
             ordered.insertOrdered(readyQueue.dequeue());
         }
 
-        return ordered.dequeue();
+        Process next = ordered.dequeue();
+
+        while (!ordered.isEmpty()) {
+            readyQueue.enqueue(ordered.dequeue());
+        }
+
+        return next;
     }
 }
