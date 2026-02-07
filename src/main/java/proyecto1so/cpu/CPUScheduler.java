@@ -1,15 +1,4 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package proyecto1so.cpu;
-
-/**
- *
- * @author ani
- */
-
-
 
 import java.util.concurrent.Semaphore;
 import proyecto1so.clock.ClockListener;
@@ -31,12 +20,13 @@ public class CPUScheduler implements ClockListener {
 
     private final Queue<Process> readyQueue = new Queue<>();
 
-    private final OrderedQueue<Process> pendingArrivals = new OrderedQueue<>(new Compare<Process>() {
-        @Override
-        public int compare(Process a, Process b) {
-            return a.getArrivalTime() - b.getArrivalTime();
-        }
-    });
+    private final OrderedQueue<Process> pendingArrivals =
+            new OrderedQueue<>(new Compare<Process>() {
+                @Override
+                public int compare(Process a, Process b) {
+                    return a.getArrivalTime() - b.getArrivalTime();
+                }
+            });
 
     private final SingleLinkedList<Process> finished = new SingleLinkedList<>();
 
@@ -48,7 +38,7 @@ public class CPUScheduler implements ClockListener {
     private int totalTicks = 0;
     private int busyTicks = 0;
 
-    // EDF: métricas de deadline
+    // EDF metrics
     private int deadlinesMet = 0;
     private int deadlinesMissed = 0;
 
@@ -59,12 +49,10 @@ public class CPUScheduler implements ClockListener {
     public void addProcess(Process p) {
         if (p == null) return;
 
-        Process toInsert = p;
-
-        // Si arrival <= 0, asigna arrival escalonado preservando priority/deadline si existen
+        // Si arrival <= 0, asigna arrival escalonado preservando priority/deadline
         if (p.getArrivalTime() <= 0) {
             int arrival = 1 + (pendingArrivals.size() * 2);
-            toInsert = new Process(
+            p = new Process(
                     p.getPid(),
                     p.getBurstTime(),
                     arrival,
@@ -73,7 +61,7 @@ public class CPUScheduler implements ClockListener {
             );
         }
 
-        pendingArrivals.insertOrdered(toInsert);
+        pendingArrivals.insertOrdered(p);
     }
 
     @Override
@@ -90,7 +78,7 @@ public class CPUScheduler implements ClockListener {
                 System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid());
             }
 
-            // 2) PREEMPCIÓN (Priority / SRT / EDF) antes de ejecutar
+            // 2) PREEMPCIÓN (Priority / SRT / EDF)
             if (currentProcess != null && shouldPreempt(currentProcess)) {
                 System.out.println("[CPU] PREEMPT -> Sale: " + currentProcess.getPid() + " (vuelve a READY)");
                 currentProcess.setState(ProcessState.READY);
@@ -98,7 +86,7 @@ public class CPUScheduler implements ClockListener {
                 currentProcess = null;
             }
 
-            // 3) Si no hay proceso corriendo, escoger siguiente
+            // 3) Seleccionar siguiente si no hay proceso corriendo
             if (currentProcess == null) {
                 currentProcess = strategy.selectNextProcess(readyQueue);
 
@@ -108,9 +96,7 @@ public class CPUScheduler implements ClockListener {
                     quantumLeft = strategy.getQuantum();
                     System.out.println("[CPU] Tick " + tick + " -> Ejecutando: " + currentProcess.getPid());
                 } else {
-                    if (pendingArrivals.isEmpty()) {
-                        System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos)");
-                    }
+                    System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos)");
                     return;
                 }
             }
@@ -236,7 +222,7 @@ public class CPUScheduler implements ClockListener {
     private boolean isDeadlineBetter(Process a, Process b) {
         int da = a.getDeadlineTick();
         int db = b.getDeadlineTick();
-        if (da != db) return da < db; // menor deadline = mejor
+        if (da != db) return da < db;
         return a.getPid().compareTo(b.getPid()) < 0;
     }
 
@@ -298,7 +284,6 @@ public class CPUScheduler implements ClockListener {
                     (sumWaiting / count), (sumTurnaround / count), (sumResponse / count));
         }
 
-        // EDF mission success rate
         int totalWithDeadline = deadlinesMet + deadlinesMissed;
         if (totalWithDeadline > 0) {
             double rate = (100.0 * deadlinesMet) / totalWithDeadline;
