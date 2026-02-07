@@ -9,37 +9,43 @@ package proyecto1so.clock;
  * @author ani
  */
 
-import proyecto1so.datastructures.SingleLinkedList;
+
+import java.util.concurrent.Semaphore;
+import proyecto1so.datastructures.Queue;
 
 public class GlobalClock extends Thread {
 
-    private final long tickMillis;
+    private final int tickMillis;
+
     private volatile boolean running = true;
-    private volatile long currentTick = 0;
+    private int currentTick = 0;
 
-    
-    private final SingleLinkedList<ClockListener> listeners = new SingleLinkedList<>();
+    private final Semaphore mutex = new Semaphore(1, true);
+    private final Queue<ClockListener> listeners = new Queue<>();
 
-    public GlobalClock(long tickMillis) {
+    public GlobalClock(int tickMillis) {
         this.tickMillis = tickMillis;
         setName("GlobalClock");
     }
 
-    
     public void addListener(ClockListener listener) {
         if (listener == null) return;
-        listeners.addLast(listener);
+        try {
+            mutex.acquire();
+            listeners.enqueue(listener);
+        } catch (InterruptedException e) {
+      
+        } finally {
+            mutex.release();
+        }
     }
 
-    
-    public long getCurrentTick() {
+    public int getCurrentTick() {
         return currentTick;
     }
 
-    
     public void stopClock() {
         running = false;
-        interrupt(); 
     }
 
     @Override
@@ -48,26 +54,31 @@ public class GlobalClock extends Thread {
             try {
                 Thread.sleep(tickMillis);
             } catch (InterruptedException e) {
-                
-                if (!running) break;
+           
             }
 
-            
-            if (!running) break;
-
             currentTick++;
-
-           
             System.out.println("[CLOCK] Tick: " + currentTick);
 
             
-            final int tickInt = (int) currentTick;
-            listeners.forEach(new SingleLinkedList.Visitor<ClockListener>() {
-                @Override
-                public void visit(ClockListener l) {
-                    l.onTick(tickInt);
+            try {
+                mutex.acquire();
+
+                int n = listeners.size();
+                for (int i = 0; i < n; i++) {
+                    ClockListener l = listeners.dequeue();
+                
+                    listeners.enqueue(l);
+
+                    if (l != null) {
+                        l.onTick(currentTick);
+                    }
                 }
-            });
+            } catch (InterruptedException e) {
+            
+            } finally {
+                mutex.release();
+            }
         }
     }
 }
