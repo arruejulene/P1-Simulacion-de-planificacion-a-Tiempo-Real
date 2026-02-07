@@ -10,30 +10,38 @@ package proyecto1so.demo;
  */
 
 
+
+
 import proyecto1so.clock.GlobalClock;
 import proyecto1so.cpu.CPUScheduler;
+import proyecto1so.model.Process;
+import proyecto1so.scheduler.PriorityPreemptiveStrategy;
 
 public class MainCPUSchedulerTest {
 
-    public static void main(String[] args) throws InterruptedException {
-
+    public static void main(String[] args) throws Exception {
         System.out.println("[TEST] Iniciando reloj...");
 
-        GlobalClock clock = new GlobalClock(500); // si te da error, me dices qué constructor tiene tu GlobalClock
-        CPUScheduler cpuScheduler = new CPUScheduler();
+        GlobalClock clock = new GlobalClock(300);
 
-        clock.addListener(cpuScheduler);
+        CPUScheduler cpu = new CPUScheduler();
+        clock.addListener(cpu);
+
+        cpu.setStrategy(new PriorityPreemptiveStrategy());
+
+        // (pid, burst, arrival, priority)
+        cpu.addProcess(new Process("P1", 8, 1, 5));
+        cpu.addProcess(new Process("P2", 3, 3, 1));
+        cpu.addProcess(new Process("P3", 4, 5, 3));
 
         clock.start();
 
-        while (clock.getCurrentTick() < 5) {
-            Thread.sleep(50);
-        }
+        // deja correr unos segundos
+        Thread.sleep(6500);
 
-        System.out.println("[TEST] Deteniendo reloj...");
-        clock.stopClock();
-        clock.join();
-
+        // imprime reporte y termina
+        cpu.printReport();
         System.out.println("[TEST] Fin.");
+        System.exit(0);
     }
 }
