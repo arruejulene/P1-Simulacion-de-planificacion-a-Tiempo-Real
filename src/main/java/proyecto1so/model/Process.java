@@ -15,35 +15,36 @@ package proyecto1so.model;
 public class Process {
 
     private final String pid;
+
     private final int burstTime;
     private int remainingTime;
 
     private final int arrivalTime;
 
+   
+    private final int priority;
+
+  
+    private ProcessState state = ProcessState.NEW;
+
     private Integer firstRunTick = null;
     private Integer finishTick = null;
 
-    // ✅ Reglas del PDF: estados + PC/MAR
-    private ProcessState state;
-    private int pc;
-    private int mar;
 
     public Process(String pid, int burstTime) {
-        this(pid, burstTime, 0);
+        this(pid, burstTime, 0, 5); 
     }
 
     public Process(String pid, int burstTime, int arrivalTime) {
+        this(pid, burstTime, arrivalTime, 5);
+    }
+
+    public Process(String pid, int burstTime, int arrivalTime, int priority) {
         this.pid = pid;
         this.burstTime = burstTime;
         this.remainingTime = burstTime;
         this.arrivalTime = arrivalTime;
-
-        // Estado inicial obligatorio
-        this.state = ProcessState.NEW;
-
-        // Simplificación: arrancan en 0
-        this.pc = 0;
-        this.mar = 0;
+        this.priority = priority;
     }
 
     public String getPid() {
@@ -62,15 +63,10 @@ public class Process {
         return arrivalTime;
     }
 
-    public Integer getFirstRunTick() {
-        return firstRunTick;
+    public int getPriority() {
+        return priority;
     }
 
-    public Integer getFinishTick() {
-        return finishTick;
-    }
-
-    // ✅ Estado
     public ProcessState getState() {
         return state;
     }
@@ -79,25 +75,22 @@ public class Process {
         this.state = state;
     }
 
-    // ✅ PC/MAR
-    public int getPc() {
-        return pc;
+    public Integer getFirstRunTick() {
+        return firstRunTick;
     }
 
-    public int getMar() {
-        return mar;
+    public Integer getFinishTick() {
+        return finishTick;
     }
 
     public boolean isFinished() {
         return remainingTime <= 0;
     }
 
-    // ✅ Consume 1 tick de CPU (1 instrucción = 1 ciclo) y aumenta PC/MAR
+
     public void consumeOneTick() {
         if (remainingTime > 0) {
             remainingTime--;
-            pc++;
-            mar++;
         }
     }
 

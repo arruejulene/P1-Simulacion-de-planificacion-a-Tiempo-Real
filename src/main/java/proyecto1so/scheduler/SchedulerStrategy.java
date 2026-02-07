@@ -18,7 +18,6 @@ public interface SchedulerStrategy {
 
     Process selectNextProcess(Queue<Process> readyQueue);
 
-    // Para FCFS: INF (no expira)
-    // Para RR: quantum fijo
+    
     int getQuantum();
 }

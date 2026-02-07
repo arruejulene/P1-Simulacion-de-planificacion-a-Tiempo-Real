@@ -10,42 +10,38 @@ package proyecto1so.demo;
  */
 
 
+
+
 import proyecto1so.clock.GlobalClock;
 import proyecto1so.cpu.CPUScheduler;
 import proyecto1so.model.Process;
-import proyecto1so.scheduler.RoundRobinStrategy;
+import proyecto1so.scheduler.PriorityPreemptiveStrategy;
 
 public class MainCPUSchedulerTest {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        System.out.println("[TEST] Iniciando reloj...");
 
-        GlobalClock clock = new GlobalClock(500); 
+        GlobalClock clock = new GlobalClock(300);
+
         CPUScheduler cpu = new CPUScheduler();
-
-       
-        cpu.setStrategy(new RoundRobinStrategy(2));
-
-      
-        cpu.addProcess(new Process("P1", 3, 1));
-        cpu.addProcess(new Process("P2", 5, 3));
-        cpu.addProcess(new Process("P3", 2, 5));
-
         clock.addListener(cpu);
 
-        System.out.println("[TEST] Iniciando reloj...");
+       
+        cpu.setStrategy(new PriorityPreemptiveStrategy());
+
+        
+        cpu.addProcess(new Process("P1", 8, 1, 5)); // baja prioridad
+        cpu.addProcess(new Process("P2", 3, 3, 1)); // alta prioridad (debe preemptar)
+        cpu.addProcess(new Process("P3", 4, 5, 3)); // media
+
         clock.start();
 
-        while (clock.getCurrentTick() < 15) {
-            try { Thread.sleep(50); } catch (InterruptedException e) { }
-        }
-
-        System.out.println("[TEST] Deteniendo reloj...");
-        clock.stopClock();
-
-        try { clock.join(); } catch (InterruptedException e) { }
-
-        cpu.printReport();
+        Thread.sleep(6500);
 
         System.out.println("[TEST] Fin.");
+        System.exit(0);
+
+        
     }
 }

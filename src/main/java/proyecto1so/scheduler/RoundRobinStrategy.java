@@ -20,16 +20,17 @@ public class RoundRobinStrategy implements SchedulerStrategy {
     private final int quantum;
 
     public RoundRobinStrategy(int quantum) {
-        this.quantum = quantum <= 0 ? 2 : quantum;
-    }
-
-    @Override
-    public Process selectNextProcess(Queue<Process> readyQueue) {
-        return readyQueue.dequeue();
+        this.quantum = quantum;
     }
 
     @Override
     public int getQuantum() {
         return quantum;
+    }
+
+    @Override
+    public Process selectNextProcess(Queue<Process> readyQueue) {
+        if (readyQueue.isEmpty()) return null;
+        return readyQueue.dequeue();
     }
 }

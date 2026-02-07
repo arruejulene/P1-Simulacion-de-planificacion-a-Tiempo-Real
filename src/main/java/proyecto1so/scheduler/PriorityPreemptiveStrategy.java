@@ -11,26 +11,28 @@ package proyecto1so.scheduler;
 
 
 
+
 import proyecto1so.datastructures.Compare;
 import proyecto1so.datastructures.OrderedQueue;
 import proyecto1so.datastructures.Queue;
 import proyecto1so.model.Process;
 
-public class SRTStrategy implements SchedulerStrategy {
+public class PriorityPreemptiveStrategy implements SchedulerStrategy {
 
     @Override
     public int getQuantum() {
-        return Integer.MAX_VALUE; 
+        return Integer.MAX_VALUE;
     }
 
     @Override
     public Process selectNextProcess(Queue<Process> readyQueue) {
-        if (readyQueue.isEmpty()) return null;
+        if (readyQueue == null || readyQueue.isEmpty()) return null;
 
+        
         OrderedQueue<Process> ordered = new OrderedQueue<>(new Compare<Process>() {
             @Override
             public int compare(Process a, Process b) {
-                int diff = a.getRemainingTime() - b.getRemainingTime();
+                int diff = a.getPriority() - b.getPriority();
                 if (diff != 0) return diff;
                 return a.getPid().compareTo(b.getPid());
             }
@@ -43,5 +45,3 @@ public class SRTStrategy implements SchedulerStrategy {
         return ordered.dequeue();
     }
 }
-
-
