@@ -45,6 +45,14 @@ public class CPUScheduler implements ClockListener {
     private int deadlinesMet = 0;
     private int deadlinesMissed = 0;
 
+    // Interrupt handling metrics/state
+    private boolean interruptInProgress = false;
+    private int interruptTicksLeft = 0;
+    private String interruptName = null;
+    private int totalInterrupts = 0;
+    private int interruptPreemptions = 0;
+    private int isrBusyTicks = 0;
+
     public void setStrategy(SchedulerStrategy strategy) {
         if (strategy != null) this.strategy = strategy;
     }
@@ -67,10 +75,45 @@ public class CPUScheduler implements ClockListener {
         pendingArrivals.insertOrdered(p);
     }
 
-    @Override
-    public void onTick(int tick) {
+    public boolean triggerExternalInterrupt(String name, int isrTicks) {
+        if (isrTicks <= 0) return false;
+        String resolvedName = (name == null || name.isBlank()) ? "EXT-IRQ" : name;
+
+        boolean acquired = false;
         try {
             mutex.acquire();
+            acquired = true;
+
+            totalInterrupts++;
+            interruptInProgress = true;
+            interruptTicksLeft += isrTicks;
+            interruptName = resolvedName;
+
+            if (currentProcess != null) {
+                currentProcess.setState(ProcessState.READY);
+                readyQueue.enqueue(currentProcess);
+                System.out.println("[INT] Preemptando " + currentProcess.getPid()
+                        + " por " + interruptName + " (ISR=" + isrTicks + " ticks)");
+                currentProcess = null;
+                interruptPreemptions++;
+            } else {
+                System.out.println("[INT] Interrupción " + interruptName
+                        + " registrada (ISR=" + isrTicks + " ticks)");
+            }
+            return true;
+        } catch (InterruptedException e) {
+            return false;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    @Override
+    public void onTick(int tick) {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
             totalTicks = tick;
 
             
@@ -79,6 +122,23 @@ public class CPUScheduler implements ClockListener {
                 arriving.setState(ProcessState.READY);
                 readyQueue.enqueue(arriving);
                 System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid());
+            }
+
+            if (interruptInProgress) {
+                busyTicks++;
+                isrBusyTicks++;
+                interruptTicksLeft--;
+
+                System.out.println("[ISR] Tick " + tick + " -> Atendiendo " + interruptName
+                        + " | restantes=" + interruptTicksLeft);
+
+                if (interruptTicksLeft <= 0) {
+                    interruptInProgress = false;
+                    interruptName = null;
+                    interruptTicksLeft = 0;
+                    System.out.println("[ISR] Tick " + tick + " -> Fin ISR, retomando scheduler");
+                }
+                return;
             }
 
 
@@ -141,7 +201,7 @@ public class CPUScheduler implements ClockListener {
         } catch (InterruptedException e) {
             
         } finally {
-            mutex.release();
+            if (acquired) mutex.release();
         }
     }
 
@@ -298,6 +358,10 @@ public class CPUScheduler implements ClockListener {
             System.out.printf("Deadlines met: %d | missed: %d | success rate: %.2f%%%n",
                     deadlinesMet, deadlinesMissed, rate);
         }
+
+        System.out.println("Interrupts: total=" + totalInterrupts
+                + " | preemptions=" + interruptPreemptions
+                + " | ISR busy ticks=" + isrBusyTicks);
 
         System.out.println("==========================================\n");
     }
