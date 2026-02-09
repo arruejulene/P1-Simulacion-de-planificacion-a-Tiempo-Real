@@ -1,7 +1,9 @@
+/Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainLoaderTest.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainCPUSchedulerTest.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainMemory.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainBlockedTest.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainEmergencyDemo.java
+/Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/loader/ProcessLoader.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/generator/ProcessGenerator.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainStateManager.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainClockTest.java
@@ -32,6 +34,7 @@
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/Proyecto1SO.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/datastructures/Queue.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainHotSwapStrategyTest.java
+/Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/loader/LoadResult.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainEDFDeadlineMissTest.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/model/StateManager.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/scheduler/SchedulerStrategy.java
