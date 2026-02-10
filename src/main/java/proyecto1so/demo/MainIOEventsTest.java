@@ -18,7 +18,7 @@ public class MainIOEventsTest {
         int tickMs = 300;
         GlobalClock clock = new GlobalClock(tickMs);
 
-        CPUScheduler cpu = new CPUScheduler(3, SuspensionPolicy.LOWEST_PRIORITY);
+        CPUScheduler cpu = new CPUScheduler(5, SuspensionPolicy.LOWEST_PRIORITY);
         cpu.setTickDurationMs(tickMs);
         cpu.setStrategy(new RoundRobinStrategy(2));
         clock.addListener(cpu);
