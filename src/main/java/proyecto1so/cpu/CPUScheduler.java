@@ -1,14 +1,12 @@
 package proyecto1so.cpu;
 
-
-
-
 import java.util.concurrent.Semaphore;
 import proyecto1so.clock.ClockListener;
 import proyecto1so.datastructures.Compare;
 import proyecto1so.datastructures.OrderedQueue;
 import proyecto1so.datastructures.Queue;
 import proyecto1so.datastructures.SingleLinkedList;
+import proyecto1so.memory.SuspensionPolicy;
 import proyecto1so.model.Process;
 import proyecto1so.model.ProcessState;
 import proyecto1so.scheduler.EDFStrategy;
@@ -22,6 +20,9 @@ public class CPUScheduler implements ClockListener {
     private final Semaphore mutex = new Semaphore(1, true);
 
     private final Queue<Process> readyQueue = new Queue<>();
+    private final Queue<Process> blockedQueue = new Queue<>();
+    private final Queue<Process> readySuspendedQueue = new Queue<>();
+    private final Queue<Process> blockedSuspendedQueue = new Queue<>();
 
     private final OrderedQueue<Process> pendingArrivals =
             new OrderedQueue<>(new Compare<Process>() {
@@ -34,9 +35,14 @@ public class CPUScheduler implements ClockListener {
     private final SingleLinkedList<Process> finished = new SingleLinkedList<>();
 
     private SchedulerStrategy strategy = new RoundRobinStrategy(2);
-
     private Process currentProcess = null;
     private int quantumLeft = 0;
+
+    private final int maxInRam;
+    private final SuspensionPolicy suspensionPolicy;
+    private int inRamCount = 0;
+    private int totalSuspensions = 0;
+    private int totalSwapIns = 0;
 
     private int totalTicks = 0;
     private int busyTicks = 0;
@@ -53,14 +59,33 @@ public class CPUScheduler implements ClockListener {
     private int interruptPreemptions = 0;
     private int isrBusyTicks = 0;
 
+    // I/O metrics/state
+    private int tickDurationMs = 300;
+    private int ioEventsRequested = 0;
+    private int ioEventsCompleted = 0;
+
+    public CPUScheduler() {
+        this(Integer.MAX_VALUE, SuspensionPolicy.LOWEST_PRIORITY);
+    }
+
+    public CPUScheduler(int maxInRam, SuspensionPolicy suspensionPolicy) {
+        this.maxInRam = maxInRam <= 0 ? Integer.MAX_VALUE : maxInRam;
+        this.suspensionPolicy = suspensionPolicy == null
+                ? SuspensionPolicy.LOWEST_PRIORITY
+                : suspensionPolicy;
+    }
+
     public void setStrategy(SchedulerStrategy strategy) {
         if (strategy != null) this.strategy = strategy;
+    }
+
+    public void setTickDurationMs(int tickDurationMs) {
+        if (tickDurationMs > 0) this.tickDurationMs = tickDurationMs;
     }
 
     public void addProcess(Process p) {
         if (p == null) return;
 
-       
         if (p.getArrivalTime() <= 0) {
             int arrival = 1 + (pendingArrivals.size() * 2);
             p = new Process(
@@ -108,6 +133,39 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+    public boolean triggerIOEvent(String reason, int serviceTicks) {
+        if (serviceTicks <= 0) return false;
+        String resolvedReason = (reason == null || reason.isBlank()) ? "IO" : reason;
+
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+
+            if (currentProcess == null) {
+                System.out.println("[IO] Evento " + resolvedReason + " ignorado: CPU sin proceso RUNNING");
+                return false;
+            }
+
+            Process blocked = currentProcess;
+            blocked.setState(ProcessState.BLOCKED);
+            blockedQueue.enqueue(blocked);
+            currentProcess = null;
+            ioEventsRequested++;
+
+            System.out.println("[IO] " + blocked.getPid() + " -> BLOCKED por " + resolvedReason
+                    + " (serviceTicks=" + serviceTicks + ")");
+
+            IOCompletionWorker worker = new IOCompletionWorker(blocked, resolvedReason, serviceTicks);
+            worker.start();
+            return true;
+        } catch (InterruptedException e) {
+            return false;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
     @Override
     public void onTick(int tick) {
         boolean acquired = false;
@@ -116,12 +174,13 @@ public class CPUScheduler implements ClockListener {
             acquired = true;
             totalTicks = tick;
 
-            
             while (!pendingArrivals.isEmpty() && pendingArrivals.peek().getArrivalTime() <= tick) {
                 Process arriving = pendingArrivals.dequeue();
-                arriving.setState(ProcessState.READY);
-                readyQueue.enqueue(arriving);
-                System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid());
+                admitArrivingProcess(arriving, tick);
+            }
+
+            while (swapInOneIfPossible()) {
+                // Fill available RAM slots with suspended processes.
             }
 
             if (interruptInProgress) {
@@ -141,7 +200,6 @@ public class CPUScheduler implements ClockListener {
                 return;
             }
 
-
             if (currentProcess != null && shouldPreempt(currentProcess)) {
                 System.out.println("[CPU] PREEMPT -> Sale: " + currentProcess.getPid() + " (vuelve a READY)");
                 currentProcess.setState(ProcessState.READY);
@@ -149,7 +207,6 @@ public class CPUScheduler implements ClockListener {
                 currentProcess = null;
             }
 
-            
             if (currentProcess == null) {
                 currentProcess = strategy.selectNextProcess(readyQueue);
 
@@ -159,29 +216,25 @@ public class CPUScheduler implements ClockListener {
                     quantumLeft = strategy.getQuantum();
                     System.out.println("[CPU] Tick " + tick + " -> Ejecutando: " + currentProcess.getPid());
                 } else {
-                    System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos)");
+                    System.out.println("[CPU] Tick " + tick + " -> IDLE (sin procesos READY en RAM)");
                     return;
                 }
             }
 
-            
             busyTicks++;
             currentProcess.consumeOneTick();
             System.out.println("    [Process " + currentProcess.getPid() + "] tiempo restante: " + currentProcess.getRemainingTime());
 
-            
             if (quantumLeft != Integer.MAX_VALUE) quantumLeft--;
 
             System.out.println("[CPU] Tick " + tick + " -> " + currentProcess.getPid()
                     + " restante=" + currentProcess.getRemainingTime()
                     + " quantumLeft=" + (quantumLeft == Integer.MAX_VALUE ? "INF" : quantumLeft));
 
-            
             if (currentProcess.isFinished()) {
                 currentProcess.markFinish(tick);
                 currentProcess.setState(ProcessState.TERMINATED);
 
-                
                 if (currentProcess.getDeadlineTick() != Integer.MAX_VALUE) {
                     if (tick <= currentProcess.getDeadlineTick()) deadlinesMet++;
                     else deadlinesMissed++;
@@ -190,6 +243,8 @@ public class CPUScheduler implements ClockListener {
                 System.out.println("[CPU] " + currentProcess.getPid() + " terminó.");
                 finished.addLast(currentProcess);
                 currentProcess = null;
+                if (inRamCount > 0) inRamCount--;
+                swapInOneIfPossible();
 
             } else if (quantumLeft == 0) {
                 currentProcess.setState(ProcessState.READY);
@@ -199,13 +254,145 @@ public class CPUScheduler implements ClockListener {
             }
 
         } catch (InterruptedException e) {
-            
+            // Keep scheduler alive.
         } finally {
             if (acquired) mutex.release();
         }
     }
 
-    
+    private void admitArrivingProcess(Process arriving, int tick) {
+        if (arriving == null) return;
+
+        if (inRamCount < maxInRam) {
+            arriving.setState(ProcessState.READY);
+            readyQueue.enqueue(arriving);
+            inRamCount++;
+            System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid()
+                    + " (READY en RAM " + inRamCount + "/" + maxInRam + ")");
+            return;
+        }
+
+        boolean freed = suspendOneVictim();
+        if (freed && inRamCount < maxInRam) {
+            arriving.setState(ProcessState.READY);
+            readyQueue.enqueue(arriving);
+            inRamCount++;
+            System.out.println("[CPU] Tick " + tick + " -> Llega: " + arriving.getPid()
+                    + " (READY en RAM tras suspensión " + inRamCount + "/" + maxInRam + ")");
+            return;
+        }
+
+        arriving.setState(ProcessState.READY_SUSPENDED);
+        readySuspendedQueue.enqueue(arriving);
+        System.out.println("[CPU] Tick " + tick + " -> RAM llena, " + arriving.getPid()
+                + " va a READY_SUSPENDED");
+    }
+
+    private boolean suspendOneVictim() {
+        Process victimReady = pickVictimFromQueue(readyQueue);
+        if (victimReady != null) {
+            victimReady.setState(ProcessState.READY_SUSPENDED);
+            readySuspendedQueue.enqueue(victimReady);
+            if (inRamCount > 0) inRamCount--;
+            totalSuspensions++;
+            System.out.println("[SWAP OUT] READY -> READY_SUSPENDED: " + victimReady.getPid()
+                    + " | inRam=" + inRamCount + "/" + maxInRam);
+            return true;
+        }
+
+        Process victimBlocked = pickVictimFromQueue(blockedQueue);
+        if (victimBlocked != null) {
+            victimBlocked.setState(ProcessState.BLOCKED_SUSPENDED);
+            blockedSuspendedQueue.enqueue(victimBlocked);
+            if (inRamCount > 0) inRamCount--;
+            totalSuspensions++;
+            System.out.println("[SWAP OUT] BLOCKED -> BLOCKED_SUSPENDED: " + victimBlocked.getPid()
+                    + " | inRam=" + inRamCount + "/" + maxInRam);
+            return true;
+        }
+
+        return false;
+    }
+
+    private boolean swapInOneIfPossible() {
+        if (inRamCount >= maxInRam) return false;
+
+        Process fromReadySusp = readySuspendedQueue.dequeue();
+        if (fromReadySusp != null) {
+            fromReadySusp.setState(ProcessState.READY);
+            readyQueue.enqueue(fromReadySusp);
+            inRamCount++;
+            totalSwapIns++;
+            System.out.println("[SWAP IN] READY_SUSPENDED -> READY: " + fromReadySusp.getPid()
+                    + " | inRam=" + inRamCount + "/" + maxInRam);
+            return true;
+        }
+
+        Process fromBlockedSusp = blockedSuspendedQueue.dequeue();
+        if (fromBlockedSusp != null) {
+            fromBlockedSusp.setState(ProcessState.BLOCKED);
+            blockedQueue.enqueue(fromBlockedSusp);
+            inRamCount++;
+            totalSwapIns++;
+            System.out.println("[SWAP IN] BLOCKED_SUSPENDED -> BLOCKED: " + fromBlockedSusp.getPid()
+                    + " | inRam=" + inRamCount + "/" + maxInRam);
+            return true;
+        }
+
+        return false;
+    }
+
+    private Process pickVictimFromQueue(Queue<Process> q) {
+        if (q == null || q.isEmpty()) return null;
+
+        Queue<Process> temp = new Queue<>();
+        Process victim = null;
+
+        int n = q.size();
+        for (int i = 0; i < n; i++) {
+            Process p = q.dequeue();
+            if (p == null) break;
+
+            if (victim == null) victim = p;
+            else if (isWorseForRam(p, victim)) victim = p;
+
+            temp.enqueue(p);
+        }
+
+        boolean removed = false;
+        int m = temp.size();
+        for (int i = 0; i < m; i++) {
+            Process p = temp.dequeue();
+            if (p == null) break;
+            if (!removed && p == victim) {
+                removed = true;
+                continue;
+            }
+            q.enqueue(p);
+        }
+
+        return victim;
+    }
+
+    private boolean isWorseForRam(Process a, Process b) {
+        if (a == null) return false;
+        if (b == null) return true;
+
+        switch (suspensionPolicy) {
+            case FARTHEST_DEADLINE:
+                if (a.getDeadlineTick() != b.getDeadlineTick()) {
+                    return a.getDeadlineTick() > b.getDeadlineTick();
+                }
+                return a.getPriority() > b.getPriority();
+
+            case LOWEST_PRIORITY:
+            default:
+                if (a.getPriority() != b.getPriority()) {
+                    return a.getPriority() > b.getPriority();
+                }
+                return a.getDeadlineTick() > b.getDeadlineTick();
+        }
+    }
 
     private boolean shouldPreempt(Process current) {
         if (readyQueue.isEmpty()) return false;
@@ -289,8 +476,6 @@ public class CPUScheduler implements ClockListener {
         return a.getPid().compareTo(b.getPid()) < 0;
     }
 
-    
-
     public void printReport() {
         System.out.println("\n================= REPORT =================");
 
@@ -342,7 +527,6 @@ public class CPUScheduler implements ClockListener {
         double util = (totalTicks == 0) ? 0.0 : ((double) busyTicks / (double) totalTicks) * 100.0;
         System.out.printf("CPU Utilization: %.2f%%%n", util);
 
-        
         double throughput = (totalTicks == 0) ? 0.0 : ((double) count / (double) totalTicks);
         System.out.printf("Throughput: %.4f procesos/tick (%d procesos en %d ticks)%n",
                 throughput, count, totalTicks);
@@ -363,6 +547,92 @@ public class CPUScheduler implements ClockListener {
                 + " | preemptions=" + interruptPreemptions
                 + " | ISR busy ticks=" + isrBusyTicks);
 
+        System.out.println("I/O events: requested=" + ioEventsRequested
+                + " | completed=" + ioEventsCompleted
+                + " | blockedQueueSize=" + blockedQueue.size());
+
+        System.out.println("RAM: inRam=" + inRamCount + "/" + maxInRam
+                + " | suspensions=" + totalSuspensions
+                + " | swapIns=" + totalSwapIns
+                + " | readySuspended=" + readySuspendedQueue.size()
+                + " | blockedSuspended=" + blockedSuspendedQueue.size());
+
         System.out.println("==========================================\n");
+    }
+
+    private void completeIO(Process process, String reason, int serviceTicks) {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+
+            if (removeOneFromQueue(blockedQueue, process)) {
+                process.setState(ProcessState.READY);
+                readyQueue.enqueue(process);
+                ioEventsCompleted++;
+                System.out.println("[IO] " + process.getPid() + " BLOCKED -> READY"
+                        + " tras " + reason + " (serviceTicks=" + serviceTicks + ")");
+                return;
+            }
+
+            if (removeOneFromQueue(blockedSuspendedQueue, process)) {
+                process.setState(ProcessState.READY_SUSPENDED);
+                readySuspendedQueue.enqueue(process);
+                ioEventsCompleted++;
+                System.out.println("[IO] " + process.getPid() + " BLOCKED_SUSPENDED -> READY_SUSPENDED"
+                        + " tras " + reason + " (serviceTicks=" + serviceTicks + ")");
+                swapInOneIfPossible();
+            }
+
+        } catch (InterruptedException e) {
+            // Keep simulation running.
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    private boolean removeOneFromQueue(Queue<Process> q, Process target) {
+        if (q == null || q.isEmpty() || target == null) return false;
+
+        SingleLinkedList<Process> temp = new SingleLinkedList<>();
+        boolean removed = false;
+
+        int n = q.size();
+        for (int i = 0; i < n; i++) {
+            Process p = q.dequeue();
+            if (p == null) break;
+
+            if (!removed && p == target) {
+                removed = true;
+                continue;
+            }
+            temp.addLast(p);
+        }
+
+        while (!temp.isEmpty()) q.enqueue(temp.removeFirst());
+        return removed;
+    }
+
+    private class IOCompletionWorker extends Thread {
+        private final Process process;
+        private final String reason;
+        private final int serviceTicks;
+
+        IOCompletionWorker(Process process, String reason, int serviceTicks) {
+            this.process = process;
+            this.reason = reason;
+            this.serviceTicks = serviceTicks;
+            setName("IOCompletion-" + process.getPid());
+        }
+
+        @Override
+        public void run() {
+            try {
+                Thread.sleep((long) serviceTicks * tickDurationMs);
+            } catch (InterruptedException e) {
+                // Complete immediately when interrupted.
+            }
+            completeIO(process, reason, serviceTicks);
+        }
     }
 }

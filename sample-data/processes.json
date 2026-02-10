@@ -1,0 +1,6 @@
+[
+  {"pid":"P200","burst":10,"arrival":1,"priority":2,"deadline":25},
+  {"pid":"P201","burst":6,"arrival":2,"priority":1,"deadline":15},
+  {"pid":"P202","burst":14,"arrival":4,"priority":4},
+  {"pid":"P_BAD","burst":"x","arrival":7,"priority":3}
+]
