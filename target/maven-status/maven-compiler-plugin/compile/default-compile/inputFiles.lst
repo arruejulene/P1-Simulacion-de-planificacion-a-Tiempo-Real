@@ -19,6 +19,7 @@
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/cpu/Process.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/memory/SuspensionPolicy.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainPCB.java
+/Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/ui/ProcessTableModel.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/scheduler/SRTStrategy.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/interrupts/InterruptGenerator.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/datastructures/SingleLinkedList.java
@@ -26,6 +27,7 @@
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/datastructures/OrderedQueue.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/clock/ClockListener.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/datastructures/Compare.java
+/Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/ui/MainSimulationUI.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/model/Process.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/demo/MainInterruptionsTest.java
 /Users/antonioolveira/Desktop/proyecto/src/main/java/proyecto1so/scheduler/RoundRobinStrategy.java

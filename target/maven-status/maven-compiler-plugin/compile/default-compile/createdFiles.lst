@@ -4,7 +4,10 @@ proyecto1so/demo/MainInterruptionsTest.class
 proyecto1so/demo/MainEDFTest.class
 proyecto1so/cpu/CPUScheduler$2.class
 proyecto1so/cpu/CPUScheduler.class
+proyecto1so/ui/MainSimulationUI.class
+proyecto1so/ui/ProcessTableModel.class
 proyecto1so/io/IOEventGenerator.class
+proyecto1so/ui/MainSimulationUI$1.class
 proyecto1so/scheduler/EDFStrategy$1.class
 proyecto1so/scheduler/SRTStrategy$1.class
 proyecto1so/demo/MainClockTest.class
