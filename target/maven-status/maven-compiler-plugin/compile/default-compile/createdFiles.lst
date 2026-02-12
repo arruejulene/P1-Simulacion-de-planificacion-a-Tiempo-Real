@@ -9,6 +9,7 @@ proyecto1so/ui/ProcessTableModel.class
 proyecto1so/io/IOEventGenerator.class
 proyecto1so/ui/MainSimulationUI$1.class
 proyecto1so/scheduler/EDFStrategy$1.class
+proyecto1so/ui/MissionQueueTableModel.class
 proyecto1so/scheduler/SRTStrategy$1.class
 proyecto1so/demo/MainClockTest.class
 proyecto1so/scheduler/RoundRobinStrategy.class

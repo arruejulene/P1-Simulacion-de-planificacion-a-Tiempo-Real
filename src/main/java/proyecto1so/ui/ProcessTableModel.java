@@ -7,7 +7,7 @@ import proyecto1so.model.ProcessState;
 public class ProcessTableModel extends AbstractTableModel {
 
     private static final String[] COLUMNS = {
-            "PID", "Remaining", "Priority", "DeadlineRem"
+            "PID", "PC", "MAR", "Remaining", "Priority", "DeadlineRem"
     };
 
     private Process[] data = new Process[0];
@@ -39,9 +39,11 @@ public class ProcessTableModel extends AbstractTableModel {
         Process p = data[rowIndex];
         switch (columnIndex) {
             case 0: return p.getPid();
-            case 1: return p.getRemainingTime();
-            case 2: return p.getPriority();
-            case 3:
+            case 1: return p.getPc();
+            case 2: return p.getMar();
+            case 3: return p.getRemainingTime();
+            case 4: return p.getPriority();
+            case 5:
                 int tickForDeadline = currentTick;
                 if (p.getState() == ProcessState.TERMINATED && p.getFinishTick() != null) {
                     tickForDeadline = p.getFinishTick();

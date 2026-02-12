@@ -1,6 +1,8 @@
 package proyecto1so.ui;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -40,6 +42,9 @@ public class MainSimulationUI extends JFrame {
     private static final String STRAT_SRT = "SRT";
     private static final String STRAT_PRIO = "PriorityPreemptive";
     private static final String STRAT_EDF = "EDF";
+    private static final String PAGE_MEMORY = "Memory management";
+    private static final String PAGE_MISSION = "Mission control";
+    private static final String PAGE_METRICS = "Metrics";
     private static final String[] SAT_SUBSYSTEMS = {
             "TELEMETRY", "PAYLOAD", "ADCS", "THERMAL", "POWER", "COMMS", "NAV", "EPS", "OBC"
     };
@@ -49,15 +54,20 @@ public class MainSimulationUI extends JFrame {
 
     private final JTextField jsonPathField = new JTextField("sample-data/processes.json");
     private final JTextField cycleField = new JTextField("300");
-    private final JCheckBox useJsonCheck = new JCheckBox("Use JSON", true);
+    private final JCheckBox useJsonCheck = new JCheckBox("Use JSON", false);
+    private final JComboBox<String> pageSelector = new JComboBox<>(
+            new String[]{PAGE_MEMORY, PAGE_MISSION, PAGE_METRICS}
+    );
     private final JComboBox<String> strategyCombo = new JComboBox<>(
             new String[]{STRAT_RR, STRAT_FCFS, STRAT_SRT, STRAT_PRIO, STRAT_EDF}
     );
 
-    private final JLabel clockLabel = new JLabel("Tick: 0");
     private final JLabel runningLabel = new JLabel("Running: -");
     private final JLabel modeLabel = new JLabel("Mode: USER");
     private final JLabel kpiLabel = new JLabel("CPU Util: 0.00% | Deadlines: 0/0");
+    private final JLabel memoryCycleLabel = new JLabel("Cycle: 0");
+    private final JLabel missionCycleLabel = new JLabel("Cycle: 0");
+    private final JLabel metricsCycleLabel = new JLabel("Cycle: 0");
 
     private final JTextArea logArea = new JTextArea();
 
@@ -66,11 +76,15 @@ public class MainSimulationUI extends JFrame {
     private final ProcessTableModel readySuspModel = new ProcessTableModel();
     private final ProcessTableModel blockedSuspModel = new ProcessTableModel();
     private final ProcessTableModel terminatedModel = new ProcessTableModel();
+    private final MissionQueueTableModel missionReadyModel = new MissionQueueTableModel();
+    private final MissionQueueTableModel missionBlockedModel = new MissionQueueTableModel();
 
     private GlobalClock clock;
     private CPUScheduler cpu;
     private IOEventGenerator ioGenerator;
     private Timer uiTimer;
+    private CardLayout pageLayout;
+    private JPanel pageContainer;
 
     private boolean started = false;
     private boolean clockStartedOnce = false;
@@ -85,13 +99,99 @@ public class MainSimulationUI extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
 
-        add(buildControlPanel(), BorderLayout.NORTH);
-        add(buildCenterPanel(), BorderLayout.CENTER);
-        add(buildBottomPanel(), BorderLayout.SOUTH);
+        add(buildPageSelectorPanel(), BorderLayout.NORTH);
+        add(buildPagesPanel(), BorderLayout.CENTER);
 
         buildSimulationEngine(300);
         setupUiTimer();
         setupFieldValidation();
+    }
+
+    private JPanel buildPageSelectorPanel() {
+        JPanel top = new JPanel(new BorderLayout());
+        top.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
+        JPanel inner = new JPanel(new GridLayout(1, 2, 6, 6));
+        inner.add(new JLabel("Page"));
+        inner.add(pageSelector);
+        top.add(inner, BorderLayout.WEST);
+
+        pageSelector.addActionListener(e -> {
+            String selected = (String) pageSelector.getSelectedItem();
+            if (selected != null && pageLayout != null && pageContainer != null) {
+                pageLayout.show(pageContainer, selected);
+            }
+        });
+        return top;
+    }
+
+    private JPanel buildPagesPanel() {
+        pageLayout = new CardLayout();
+        pageContainer = new JPanel(pageLayout);
+        pageContainer.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        pageContainer.add(buildMemoryManagementPage(), PAGE_MEMORY);
+        pageContainer.add(buildMissionControlPage(), PAGE_MISSION);
+        pageContainer.add(buildMetricsPage(), PAGE_METRICS);
+
+        pageLayout.show(pageContainer, PAGE_MISSION);
+        pageSelector.setSelectedItem(PAGE_MISSION);
+        return pageContainer;
+    }
+
+    private JPanel buildMemoryManagementPage() {
+        JPanel memoryPage = new JPanel(new BorderLayout(8, 8));
+        memoryPage.add(buildPageHeader("Memory management", memoryCycleLabel), BorderLayout.NORTH);
+        memoryPage.add(buildCenterPanel(), BorderLayout.CENTER);
+        return memoryPage;
+    }
+
+    private JPanel buildMissionControlPage() {
+        JPanel missionPage = new JPanel(new BorderLayout(8, 8));
+        JPanel top = new JPanel(new BorderLayout(6, 6));
+        top.add(buildPageHeader("Mission control", missionCycleLabel), BorderLayout.NORTH);
+        top.add(buildControlPanel(), BorderLayout.CENTER);
+        missionPage.add(top, BorderLayout.NORTH);
+        missionPage.add(buildMissionQueuesPanel(), BorderLayout.CENTER);
+        return missionPage;
+    }
+
+    private JPanel buildMissionQueuesPanel() {
+        JPanel center = new JPanel(new GridLayout(1, 3, 8, 8));
+        center.add(wrapTable("Ready", new JTable(missionReadyModel)));
+
+        JPanel middle = new JPanel(new BorderLayout());
+        JButton emergencyBtn = new JButton("Emergency (Interruption)");
+        emergencyBtn.addActionListener(e -> triggerRandomExternalInterrupt());
+        middle.add(emergencyBtn, BorderLayout.CENTER);
+        center.add(middle);
+
+        center.add(wrapTable("Blocked", new JTable(missionBlockedModel)));
+        return center;
+    }
+
+    private JPanel buildPlaceholderPage(String title) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder(title));
+        panel.add(new JLabel("Coming soon"), BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel buildMetricsPage() {
+        JPanel metricsPage = new JPanel(new BorderLayout(8, 8));
+        metricsPage.add(buildPageHeader("Metrics", metricsCycleLabel), BorderLayout.NORTH);
+        metricsPage.add(buildMetricsCenterPanel(), BorderLayout.CENTER);
+        metricsPage.add(buildBottomPanel(), BorderLayout.SOUTH);
+        return metricsPage;
+    }
+
+    private JPanel buildPageHeader(String title, JLabel cycleLabel) {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        header.add(new JLabel(title), BorderLayout.WEST);
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        right.add(cycleLabel);
+        header.add(right, BorderLayout.EAST);
+        return header;
     }
 
     private JPanel buildControlPanel() {
@@ -108,15 +208,12 @@ public class MainSimulationUI extends JFrame {
         strategyCombo.addActionListener(e -> applySelectedStrategy());
         row1.add(strategyCombo);
 
-        JPanel row2 = new JPanel(new GridLayout(1, 3, 6, 6));
+        JPanel row2 = new JPanel(new GridLayout(1, 1, 6, 6));
         JButton genRandomBtn = new JButton("Generate Random");
         genRandomBtn.addActionListener(e -> generateRandomBatch());
         row2.add(genRandomBtn);
-        JButton randomIrqBtn = new JButton("Emergency (Interruption)");
-        randomIrqBtn.addActionListener(e -> triggerRandomExternalInterrupt());
-        row2.add(randomIrqBtn);
 
-        JPanel row3 = new JPanel(new GridLayout(1, 6, 6, 6));
+        JPanel row3 = new JPanel(new GridLayout(1, 5, 6, 6));
         JButton startBtn = new JButton("Start");
         startBtn.addActionListener(e -> startSimulation());
         row3.add(startBtn);
@@ -126,7 +223,6 @@ public class MainSimulationUI extends JFrame {
         JButton resetBtn = new JButton("Reset Engine");
         resetBtn.addActionListener(e -> resetSimulationEngine());
         row3.add(resetBtn);
-        row3.add(clockLabel);
         row3.add(runningLabel);
         row3.add(modeLabel);
 
@@ -137,21 +233,27 @@ public class MainSimulationUI extends JFrame {
     }
 
     private JPanel buildCenterPanel() {
-        JPanel main = new JPanel(new GridLayout(3, 2, 8, 8));
+        JPanel main = new JPanel(new GridLayout(2, 2, 8, 8));
         main.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
 
         main.add(wrapTable("Ready", new JTable(readyModel)));
         main.add(wrapTable("Blocked", new JTable(blockedModel)));
         main.add(wrapTable("Ready Suspended", new JTable(readySuspModel)));
         main.add(wrapTable("Blocked Suspended", new JTable(blockedSuspModel)));
-        main.add(wrapTable("Terminated", new JTable(terminatedModel)));
+        return main;
+    }
+
+    private JPanel buildMetricsCenterPanel() {
+        JPanel panel = new JPanel(new GridLayout(1, 2, 8, 8));
+        panel.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        panel.add(wrapTable("Terminated", new JTable(terminatedModel)));
 
         JSplitPane side = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         side.setResizeWeight(0.15);
         side.setTopComponent(new JLabel("Log"));
         side.setBottomComponent(new JScrollPane(logArea));
-        main.add(side);
-        return main;
+        panel.add(side);
+        return panel;
     }
 
     private JPanel buildBottomPanel() {
@@ -332,8 +434,12 @@ public class MainSimulationUI extends JFrame {
         readySuspModel.setData(readySusp, tick);
         blockedSuspModel.setData(blockedSusp, tick);
         terminatedModel.setData(done, tick);
+        missionReadyModel.setData(ready);
+        missionBlockedModel.setData(blocked);
 
-        clockLabel.setText("Tick: " + tick);
+        memoryCycleLabel.setText("Cycle: " + tick);
+        missionCycleLabel.setText("Cycle: " + tick);
+        metricsCycleLabel.setText("Cycle: " + tick);
         runningLabel.setText("Running: " + (running == null ? "-" : running.getPid()));
         modeLabel.setText("Mode: " + (running == null ? "SO/IDLE" : "USER"));
 
