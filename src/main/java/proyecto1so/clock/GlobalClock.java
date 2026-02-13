@@ -15,7 +15,7 @@ import proyecto1so.datastructures.Queue;
 
 public class GlobalClock extends Thread {
 
-    private final int tickMillis;
+    private volatile int tickMillis;
 
     private volatile boolean running = true;
     private int currentTick = 0;
@@ -28,15 +28,25 @@ public class GlobalClock extends Thread {
         setName("GlobalClock");
     }
 
+    public void setTickMillis(int tickMillis) {
+        if (tickMillis > 0) this.tickMillis = tickMillis;
+    }
+
+    public int getTickMillis() {
+        return tickMillis;
+    }
+
     public void addListener(ClockListener listener) {
         if (listener == null) return;
+        boolean acquired = false;
         try {
             mutex.acquire();
+            acquired = true;
             listeners.enqueue(listener);
         } catch (InterruptedException e) {
       
         } finally {
-            mutex.release();
+            if (acquired) mutex.release();
         }
     }
 

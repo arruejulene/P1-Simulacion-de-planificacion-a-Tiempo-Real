@@ -4,13 +4,14 @@
 
 package proyecto1so;
 
-/**
- *
- * @author Indatech
- */
-public class Proyecto1SO {
+import javax.swing.SwingUtilities;
+import proyecto1so.ui.MainSimulationUI;
 
+public class Proyecto1SO {
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        SwingUtilities.invokeLater(() -> {
+            MainSimulationUI ui = new MainSimulationUI();
+            ui.setVisible(true);
+        });
     }
 }

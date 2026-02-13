@@ -68,6 +68,10 @@ public class Process {
 
     public int getDeadlineTick() { return deadlineTick; }
 
+    public int getPc() { return burstTime - remainingTime; }
+
+    public int getMar() { return burstTime - remainingTime; }
+
 
     public int getDeadlineRemaining(int currentTick) {
         if (deadlineTick == Integer.MAX_VALUE) return Integer.MAX_VALUE;

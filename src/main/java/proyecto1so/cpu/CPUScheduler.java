@@ -166,6 +166,142 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+    public Process getCurrentProcessSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return currentProcess;
+        } catch (InterruptedException e) {
+            return null;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public Process[] snapshotReadyQueue() {
+        return snapshotQueue(readyQueue);
+    }
+
+    public Process[] snapshotBlockedQueue() {
+        return snapshotQueue(blockedQueue);
+    }
+
+    public Process[] snapshotReadySuspendedQueue() {
+        return snapshotQueue(readySuspendedQueue);
+    }
+
+    public Process[] snapshotBlockedSuspendedQueue() {
+        return snapshotQueue(blockedSuspendedQueue);
+    }
+
+    public Process[] snapshotFinishedQueue() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+
+            Process[] values = new Process[finished.size()];
+            int i = 0;
+
+            SingleLinkedList<Process> temp = new SingleLinkedList<>();
+            while (!finished.isEmpty()) {
+                Process p = finished.removeFirst();
+                temp.addLast(p);
+                values[i++] = p;
+            }
+            while (!temp.isEmpty()) finished.addLast(temp.removeFirst());
+            return values;
+
+        } catch (InterruptedException e) {
+            return new Process[0];
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getTotalTicksSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return totalTicks;
+        } catch (InterruptedException e) {
+            return totalTicks;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getBusyTicksSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return busyTicks;
+        } catch (InterruptedException e) {
+            return busyTicks;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getDeadlinesMetSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return deadlinesMet;
+        } catch (InterruptedException e) {
+            return deadlinesMet;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getDeadlinesMissedSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return deadlinesMissed;
+        } catch (InterruptedException e) {
+            return deadlinesMissed;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public String getStrategyNameSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return strategy == null ? "-" : strategy.getClass().getSimpleName();
+        } catch (InterruptedException e) {
+            return "-";
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getInRamCountSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return inRamCount;
+        } catch (InterruptedException e) {
+            return inRamCount;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getMaxInRamSnapshot() {
+        return maxInRam;
+    }
+
     @Override
     public void onTick(int tick) {
         boolean acquired = false;
@@ -286,6 +422,44 @@ public class CPUScheduler implements ClockListener {
         readySuspendedQueue.enqueue(arriving);
         System.out.println("[CPU] Tick " + tick + " -> RAM llena, " + arriving.getPid()
                 + " va a READY_SUSPENDED");
+    }
+
+    private Process[] snapshotQueue(Queue<Process> q) {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+
+            Process[] values = new Process[q.size()];
+            int idx = 0;
+            Queue<Process> temp = new Queue<>();
+
+            int n = q.size();
+            for (int i = 0; i < n; i++) {
+                Process p = q.dequeue();
+                if (p == null) break;
+                values[idx++] = p;
+                temp.enqueue(p);
+            }
+
+            int m = temp.size();
+            for (int i = 0; i < m; i++) {
+                Process p = temp.dequeue();
+                if (p == null) break;
+                q.enqueue(p);
+            }
+
+            if (idx == values.length) return values;
+
+            Process[] trimmed = new Process[idx];
+            for (int i = 0; i < idx; i++) trimmed[i] = values[i];
+            return trimmed;
+
+        } catch (InterruptedException e) {
+            return new Process[0];
+        } finally {
+            if (acquired) mutex.release();
+        }
     }
 
     private boolean suspendOneVictim() {
