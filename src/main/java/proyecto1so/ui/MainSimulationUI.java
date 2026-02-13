@@ -2,7 +2,11 @@ package proyecto1so.ui;
 
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -21,6 +25,14 @@ import javax.swing.JTextField;
 import javax.swing.JCheckBox;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.data.xy.XYSeries;
+import org.jfree.data.xy.XYSeriesCollection;
 import proyecto1so.clock.GlobalClock;
 import proyecto1so.cpu.CPUScheduler;
 import proyecto1so.io.IOEventGenerator;
@@ -78,6 +90,8 @@ public class MainSimulationUI extends JFrame {
     private final ProcessTableModel terminatedModel = new ProcessTableModel();
     private final MissionQueueTableModel missionReadyModel = new MissionQueueTableModel();
     private final MissionQueueTableModel missionBlockedModel = new MissionQueueTableModel();
+    private final XYSeries cpuUtilSeries = new XYSeries("CPU Utilization (%)");
+    private final XYSeries memUtilSeries = new XYSeries("Memory Utilization (%)");
 
     private GlobalClock clock;
     private CPUScheduler cpu;
@@ -88,6 +102,8 @@ public class MainSimulationUI extends JFrame {
 
     private boolean started = false;
     private boolean clockStartedOnce = false;
+    private int lastCpuUtilTickPlotted = -1;
+    private int lastMemUtilTickPlotted = -1;
     private long randomSeed = 87364512L;
     private int nextPid = 1;
     private int irqCounter = 1;
@@ -141,7 +157,13 @@ public class MainSimulationUI extends JFrame {
     private JPanel buildMemoryManagementPage() {
         JPanel memoryPage = new JPanel(new BorderLayout(8, 8));
         memoryPage.add(buildPageHeader("Memory management", memoryCycleLabel), BorderLayout.NORTH);
-        memoryPage.add(buildCenterPanel(), BorderLayout.CENTER);
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        split.setResizeWeight(0.34);
+        split.setContinuousLayout(true);
+        split.setTopComponent(buildMemoryUtilChartPanel());
+        split.setBottomComponent(buildCenterPanel());
+        memoryPage.add(split, BorderLayout.CENTER);
         return memoryPage;
     }
 
@@ -159,14 +181,57 @@ public class MainSimulationUI extends JFrame {
         JPanel center = new JPanel(new GridLayout(1, 3, 8, 8));
         center.add(wrapTable("Ready", new JTable(missionReadyModel)));
 
-        JPanel middle = new JPanel(new BorderLayout());
-        JButton emergencyBtn = new JButton("Emergency (Interruption)");
+        JPanel middle = new JPanel(new GridLayout(3, 1, 6, 6));
+        JPanel topBlank = new JPanel();
+        JPanel centerSlot = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel bottomBlank = new JPanel();
+
+        JButton emergencyBtn = createEmergencyButton();
         emergencyBtn.addActionListener(e -> triggerRandomExternalInterrupt());
-        middle.add(emergencyBtn, BorderLayout.CENTER);
+        centerSlot.add(emergencyBtn);
+
+        middle.add(topBlank);
+        middle.add(centerSlot);
+        middle.add(bottomBlank);
         center.add(middle);
 
         center.add(wrapTable("Blocked", new JTable(missionBlockedModel)));
         return center;
+    }
+
+    private JButton createEmergencyButton() {
+        return new JButton("Emergency") {
+            {
+                setToolTipText("Emergency (Interruption)");
+                setForeground(Color.WHITE);
+                setFont(getFont().deriveFont(15f));
+                setFocusPainted(false);
+                setBorderPainted(false);
+                setContentAreaFilled(false);
+                setOpaque(false);
+                setPreferredSize(new Dimension(150, 48));
+                setMinimumSize(new Dimension(150, 48));
+                setMaximumSize(new Dimension(150, 48));
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(getModel().isArmed() ? new Color(185, 28, 28) : new Color(220, 38, 38));
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 24, 24);
+                g2.setColor(new Color(127, 29, 29));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 24, 24);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            protected void paintBorder(Graphics g) {
+                // Border is painted in paintComponent.
+            }
+        };
     }
 
     private JPanel buildPlaceholderPage(String title) {
@@ -243,17 +308,74 @@ public class MainSimulationUI extends JFrame {
         return main;
     }
 
+    private JPanel buildMemoryUtilChartPanel() {
+        XYSeriesCollection dataset = new XYSeriesCollection(memUtilSeries);
+        JFreeChart chart = ChartFactory.createXYLineChart(
+                "Memory Utilization vs Time",
+                "Cycle",
+                "Memory Utilization (%)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                false,
+                true,
+                false
+        );
+        XYPlot plot = chart.getXYPlot();
+        NumberAxis range = (NumberAxis) plot.getRangeAxis();
+        range.setRange(0.0, 100.0);
+        range.setAutoRange(false);
+
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setDomainZoomable(false);
+        chartPanel.setRangeZoomable(false);
+        chartPanel.setPreferredSize(new Dimension(800, 220));
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBorder(BorderFactory.createTitledBorder("Real-time Memory Utilization"));
+        wrapper.add(chartPanel, BorderLayout.CENTER);
+        return wrapper;
+    }
+
     private JPanel buildMetricsCenterPanel() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 8, 8));
+        JPanel panel = new JPanel(new GridLayout(2, 1, 8, 8));
         panel.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
-        panel.add(wrapTable("Terminated", new JTable(terminatedModel)));
+
+        panel.add(buildCpuUtilChartPanel());
+
+        JPanel bottom = new JPanel(new GridLayout(1, 2, 8, 8));
+        bottom.add(wrapTable("Terminated", new JTable(terminatedModel)));
 
         JSplitPane side = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         side.setResizeWeight(0.15);
         side.setTopComponent(new JLabel("Log"));
         side.setBottomComponent(new JScrollPane(logArea));
-        panel.add(side);
+        bottom.add(side);
+
+        panel.add(bottom);
         return panel;
+    }
+
+    private JPanel buildCpuUtilChartPanel() {
+        XYSeriesCollection dataset = new XYSeriesCollection(cpuUtilSeries);
+        JFreeChart chart = ChartFactory.createXYLineChart(
+                "CPU Utilization vs Time",
+                "Cycle",
+                "CPU Utilization (%)",
+                dataset,
+                PlotOrientation.VERTICAL,
+                false,
+                true,
+                false
+        );
+
+        ChartPanel chartPanel = new ChartPanel(chart);
+        chartPanel.setDomainZoomable(false);
+        chartPanel.setRangeZoomable(false);
+
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBorder(BorderFactory.createTitledBorder("Real-time CPU Utilization"));
+        wrapper.add(chartPanel, BorderLayout.CENTER);
+        return wrapper;
     }
 
     private JPanel buildBottomPanel() {
@@ -280,6 +402,10 @@ public class MainSimulationUI extends JFrame {
         ioGenerator = null;
         started = false;
         clockStartedOnce = false;
+        cpuUtilSeries.clear();
+        memUtilSeries.clear();
+        lastCpuUtilTickPlotted = -1;
+        lastMemUtilTickPlotted = -1;
         log("[ENGINE] New engine created (tickMs=" + tickMs + ")");
     }
 
@@ -447,11 +573,23 @@ public class MainSimulationUI extends JFrame {
         int busyTicks = cpu.getBusyTicksSnapshot();
         int met = cpu.getDeadlinesMetSnapshot();
         int missed = cpu.getDeadlinesMissedSnapshot();
+        int inRam = cpu.getInRamCountSnapshot();
+        int maxInRam = cpu.getMaxInRamSnapshot();
         double util = totalTicks <= 0 ? 0.0 : (100.0 * busyTicks / totalTicks);
+        double memUtil = maxInRam <= 0 ? 0.0 : (100.0 * inRam / maxInRam);
         int totalDeadline = met + missed;
         double deadlineRate = totalDeadline <= 0 ? 0.0 : (100.0 * met / totalDeadline);
         kpiLabel.setText(String.format("CPU Util: %.2f%% | Deadline success: %.2f%% (%d/%d)",
                 util, deadlineRate, met, totalDeadline));
+
+        if (tick != lastCpuUtilTickPlotted) {
+            cpuUtilSeries.add(tick, util);
+            lastCpuUtilTickPlotted = tick;
+        }
+        if (tick != lastMemUtilTickPlotted) {
+            memUtilSeries.add(tick, memUtil);
+            lastMemUtilTickPlotted = tick;
+        }
     }
 
     private Integer readCycleMsOrShowError() {

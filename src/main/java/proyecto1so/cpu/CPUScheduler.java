@@ -285,6 +285,23 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+    public int getInRamCountSnapshot() {
+        boolean acquired = false;
+        try {
+            mutex.acquire();
+            acquired = true;
+            return inRamCount;
+        } catch (InterruptedException e) {
+            return inRamCount;
+        } finally {
+            if (acquired) mutex.release();
+        }
+    }
+
+    public int getMaxInRamSnapshot() {
+        return maxInRam;
+    }
+
     @Override
     public void onTick(int tick) {
         boolean acquired = false;
