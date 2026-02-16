@@ -1,10 +1,12 @@
 proyecto1so/demo/MainIOEventsTest.class
+proyecto1so/ui/MainSimulationUI$4.class
 proyecto1so/scheduler/SchedulerStrategy.class
 proyecto1so/demo/MainInterruptionsTest.class
 proyecto1so/demo/MainEDFTest.class
 proyecto1so/cpu/CPUScheduler$2.class
 proyecto1so/cpu/CPUScheduler.class
 proyecto1so/ui/MainSimulationUI.class
+proyecto1so/ui/MainSimulationUI$3.class
 proyecto1so/ui/ProcessTableModel.class
 proyecto1so/io/IOEventGenerator.class
 proyecto1so/ui/MainSimulationUI$1.class
@@ -19,6 +21,7 @@ proyecto1so/demo/MainClockTest$1.class
 proyecto1so/cpu/Process.class
 proyecto1so/clock/GlobalClock.class
 proyecto1so/clock/ClockListener.class
+proyecto1so/ui/MainSimulationUI$6.class
 proyecto1so/demo/MainHotSwapStrategyTest.class
 proyecto1so/demo/MainCPUSchedulerTest.class
 proyecto1so/cpu/CPUScheduler$IOCompletionWorker.class
@@ -27,6 +30,7 @@ proyecto1so/scheduler/PriorityPreemptiveStrategy$1.class
 proyecto1so/interrupts/InterruptGenerator.class
 proyecto1so/scheduler/SRTStrategy.class
 proyecto1so/scheduler/PriorityPreemptiveStrategy.class
+proyecto1so/ui/MainSimulationUI$5.class
 proyecto1so/scheduler/FCFSStrategy.class
 proyecto1so/scheduler/EDFStrategy.class
 proyecto1so/demo/MainEDFDeadlineMissTest.class

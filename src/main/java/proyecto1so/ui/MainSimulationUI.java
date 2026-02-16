@@ -1,15 +1,20 @@
 package proyecto1so.ui;
 
 import java.awt.BorderLayout;
+import java.awt.BasicStroke;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GradientPaint;
 import java.awt.GridLayout;
+import java.awt.Rectangle;
+import java.awt.Shape;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.geom.Ellipse2D;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -23,8 +28,13 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JCheckBox;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.border.LineBorder;
+import javax.swing.border.TitledBorder;
+import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.table.DefaultTableCellRenderer;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -64,6 +74,15 @@ public class MainSimulationUI extends JFrame {
             "CAPTURE", "FILTER", "SYNC", "CHECK", "CALIBRATE", "TRACK", "ENCODE", "DOWNLINK", "UPLINK"
     };
 
+    // Space palette
+    private static final Color SPACE_BG = new Color(8, 12, 28);
+    private static final Color SPACE_PANEL = new Color(16, 24, 52);
+    private static final Color SPACE_INPUT = new Color(22, 32, 70);
+    private static final Color SPACE_TEXT = new Color(232, 235, 255);
+    private static final Color SPACE_MUTED = new Color(176, 185, 230);
+    private static final Color SPACE_ACCENT = new Color(167, 139, 250);
+    private static final Color SPACE_ACCENT_2 = new Color(99, 102, 241);
+
     private final JTextField jsonPathField = new JTextField("sample-data/processes.json");
     private final JTextField cycleField = new JTextField("300");
     private final JCheckBox useJsonCheck = new JCheckBox("Use JSON", false);
@@ -80,6 +99,8 @@ public class MainSimulationUI extends JFrame {
     private final JLabel memoryCycleLabel = new JLabel("Cycle: 0");
     private final JLabel missionCycleLabel = new JLabel("Cycle: 0");
     private final JLabel metricsCycleLabel = new JLabel("Cycle: 0");
+    private final JLabel missionRunningProcessLabel = new JLabel("-");
+    private final JLabel missionRunningDeadlineLabel = new JLabel("DeadlineRem: -");
 
     private final JTextArea logArea = new JTextArea();
 
@@ -109,7 +130,7 @@ public class MainSimulationUI extends JFrame {
     private int irqCounter = 1;
 
     public MainSimulationUI() {
-        super("RTOS Simulator - GUI MVP");
+        super("RTOS Simulator");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1280, 820);
         setLocationRelativeTo(null);
@@ -121,6 +142,7 @@ public class MainSimulationUI extends JFrame {
         buildSimulationEngine(300);
         setupUiTimer();
         setupFieldValidation();
+        applySpaceTheme();
     }
 
     private JPanel buildPageSelectorPanel() {
@@ -156,14 +178,11 @@ public class MainSimulationUI extends JFrame {
 
     private JPanel buildMemoryManagementPage() {
         JPanel memoryPage = new JPanel(new BorderLayout(8, 8));
-        memoryPage.add(buildPageHeader("Memory management", memoryCycleLabel), BorderLayout.NORTH);
-
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        split.setResizeWeight(0.34);
-        split.setContinuousLayout(true);
-        split.setTopComponent(buildMemoryUtilChartPanel());
-        split.setBottomComponent(buildCenterPanel());
-        memoryPage.add(split, BorderLayout.CENTER);
+        JPanel top = new JPanel(new BorderLayout(8, 8));
+        top.add(buildPageHeader("Memory management", memoryCycleLabel), BorderLayout.NORTH);
+        top.add(buildMemoryUtilChartPanel(), BorderLayout.CENTER);
+        memoryPage.add(top, BorderLayout.NORTH);
+        memoryPage.add(buildCenterPanel(), BorderLayout.CENTER);
         return memoryPage;
     }
 
@@ -182,15 +201,15 @@ public class MainSimulationUI extends JFrame {
         center.add(wrapTable("Ready", new JTable(missionReadyModel)));
 
         JPanel middle = new JPanel(new GridLayout(3, 1, 6, 6));
-        JPanel topBlank = new JPanel();
-        JPanel centerSlot = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        JPanel topSlot = buildRunningProcessPanel();
+        JPanel centerSlot = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 28));
         JPanel bottomBlank = new JPanel();
 
         JButton emergencyBtn = createEmergencyButton();
         emergencyBtn.addActionListener(e -> triggerRandomExternalInterrupt());
         centerSlot.add(emergencyBtn);
 
-        middle.add(topBlank);
+        middle.add(topSlot);
         middle.add(centerSlot);
         middle.add(bottomBlank);
         center.add(middle);
@@ -199,30 +218,124 @@ public class MainSimulationUI extends JFrame {
         return center;
     }
 
+    private JPanel buildRunningProcessPanel() {
+        JPanel card = new JPanel(new GridLayout(3, 1, 2, 2));
+        TitledBorder tb = BorderFactory.createTitledBorder(new LineBorder(SPACE_ACCENT, 1), "Running Process");
+        tb.setTitleColor(SPACE_TEXT);
+        card.setBorder(tb);
+        missionRunningProcessLabel.setHorizontalAlignment(JLabel.CENTER);
+        missionRunningProcessLabel.setFont(missionRunningProcessLabel.getFont().deriveFont(20f));
+        missionRunningDeadlineLabel.setHorizontalAlignment(JLabel.CENTER);
+        card.add(new JLabel(""));
+        card.add(missionRunningProcessLabel);
+        card.add(missionRunningDeadlineLabel);
+        return card;
+    }
+
     private JButton createEmergencyButton() {
-        return new JButton("Emergency") {
+        return new JButton("") {
+            private Shape shape;
             {
+                putClientProperty("emergencyButton", Boolean.TRUE);
                 setToolTipText("Emergency (Interruption)");
                 setForeground(Color.WHITE);
-                setFont(getFont().deriveFont(15f));
+                setFont(getFont().deriveFont(12.5f));
                 setFocusPainted(false);
                 setBorderPainted(false);
                 setContentAreaFilled(false);
                 setOpaque(false);
-                setPreferredSize(new Dimension(150, 48));
-                setMinimumSize(new Dimension(150, 48));
-                setMaximumSize(new Dimension(150, 48));
+                setPreferredSize(new Dimension(132, 132));
+                setMinimumSize(new Dimension(132, 132));
+                setMaximumSize(new Dimension(132, 132));
             }
 
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(getModel().isArmed() ? new Color(185, 28, 28) : new Color(220, 38, 38));
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 24, 24);
-                g2.setColor(new Color(127, 29, 29));
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 24, 24);
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int w = getWidth();
+                int h = getHeight();
+                int labelBand = 24;
+                int circleAreaH = Math.max(1, h - labelBand);
+                int d = Math.min(w, circleAreaH);
+                int x = (w - d) / 2;
+                int y = (circleAreaH - d) / 2;
+                int pressOffset = getModel().isArmed() ? 1 : 0;
+
+                // Squared base plate
+                int plateMargin = 2;
+                int plateArc = 16;
+                int px = x + plateMargin;
+                int py = y + plateMargin + pressOffset;
+                int pw = d - (plateMargin * 2);
+                int ph = d - (plateMargin * 2);
+
+                GradientPaint plate = new GradientPaint(
+                        px, py, new Color(37, 45, 67),
+                        px, py + ph, new Color(20, 28, 48)
+                );
+                g2.setPaint(plate);
+                g2.fillRoundRect(px, py, pw, ph, plateArc, plateArc);
+                g2.setColor(new Color(129, 140, 165, 180));
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.drawRoundRect(px, py, pw - 1, ph - 1, plateArc, plateArc);
+
+                // Base shadow
+                g2.setColor(new Color(0, 0, 0, 70));
+                g2.fillOval(x + 10, y + 12 + pressOffset, d - 20, d - 20);
+
+                // Metallic outer ring (dark -> light)
+                GradientPaint ringOuter = new GradientPaint(
+                        x, y + pressOffset, new Color(43, 52, 73),
+                        x, y + d + pressOffset, new Color(129, 140, 165)
+                );
+                g2.setPaint(ringOuter);
+                g2.fillOval(x + 6, y + 6 + pressOffset, d - 12, d - 12);
+
+                // Ring inner bevel
+                GradientPaint ringInner = new GradientPaint(
+                        x, y + 7 + pressOffset, new Color(148, 163, 184),
+                        x, y + d - 7 + pressOffset, new Color(51, 65, 85)
+                );
+                g2.setPaint(ringInner);
+                g2.fillOval(x + 12, y + 12 + pressOffset, d - 24, d - 24);
+
+                // Red glass dome core
+                GradientPaint dome = new GradientPaint(
+                        x, y + 14 + pressOffset, new Color(248, 113, 113),
+                        x, y + d - 14 + pressOffset, new Color(127, 29, 29)
+                );
+                g2.setPaint(dome);
+                g2.fillOval(x + 18, y + 18 + pressOffset, d - 36, d - 36);
+
+                // Deep center tint for depth
+                GradientPaint innerTint = new GradientPaint(
+                        x, y + 22 + pressOffset, new Color(220, 38, 38, 160),
+                        x, y + d - 18 + pressOffset, new Color(69, 10, 10, 175)
+                );
+                g2.setPaint(innerTint);
+                g2.fillOval(x + 26, y + 26 + pressOffset, d - 52, d - 52);
+
+                // Glass highlight
+                g2.setColor(new Color(255, 255, 255, 95));
+                g2.fillOval(x + 28, y + 26 + pressOffset, d - 56, (d - 36) / 3);
+
+                // Fine outlines
+                g2.setStroke(new BasicStroke(1.2f));
+                g2.setColor(new Color(15, 23, 42, 180));
+                g2.drawOval(x + 6, y + 6 + pressOffset, d - 13, d - 13);
+                g2.setColor(new Color(190, 24, 24, 190));
+                g2.drawOval(x + 18, y + 18 + pressOffset, d - 37, d - 37);
+
+                // Label on square base
+                String baseLabel = "EMERGENCY";
+                g2.setFont(getFont().deriveFont(11.5f));
+                java.awt.FontMetrics fm = g2.getFontMetrics();
+                int tx = px + (pw - fm.stringWidth(baseLabel)) / 2;
+                int ty = h - 8;
+                g2.setColor(new Color(226, 232, 240));
+                g2.drawString(baseLabel, tx, ty);
                 g2.dispose();
                 super.paintComponent(g);
             }
@@ -230,6 +343,19 @@ public class MainSimulationUI extends JFrame {
             @Override
             protected void paintBorder(Graphics g) {
                 // Border is painted in paintComponent.
+            }
+
+            @Override
+            public boolean contains(int x, int y) {
+                int labelBand = 24;
+                int circleAreaH = Math.max(1, getHeight() - labelBand);
+                int d = Math.min(getWidth(), circleAreaH);
+                int ox = (getWidth() - d) / 2;
+                int oy = (circleAreaH - d) / 2;
+                if (shape == null || !shape.getBounds().equals(getBounds())) {
+                    shape = new Ellipse2D.Float(ox, oy, d, d);
+                }
+                return shape.contains(x, y);
             }
         };
     }
@@ -274,18 +400,18 @@ public class MainSimulationUI extends JFrame {
         row1.add(strategyCombo);
 
         JPanel row2 = new JPanel(new GridLayout(1, 1, 6, 6));
-        JButton genRandomBtn = new JButton("Generate Random");
+        JButton genRandomBtn = createRoundedActionButton("Generate 20 Random Processes");
         genRandomBtn.addActionListener(e -> generateRandomBatch());
         row2.add(genRandomBtn);
 
         JPanel row3 = new JPanel(new GridLayout(1, 5, 6, 6));
-        JButton startBtn = new JButton("Start");
+        JButton startBtn = createRoundedActionButton("Start");
         startBtn.addActionListener(e -> startSimulation());
         row3.add(startBtn);
-        JButton stopBtn = new JButton("Stop");
+        JButton stopBtn = createRoundedActionButton("Stop");
         stopBtn.addActionListener(e -> stopSimulation());
         row3.add(stopBtn);
-        JButton resetBtn = new JButton("Reset Engine");
+        JButton resetBtn = createRoundedActionButton("Reset Engine");
         resetBtn.addActionListener(e -> resetSimulationEngine());
         row3.add(resetBtn);
         row3.add(runningLabel);
@@ -322,16 +448,32 @@ public class MainSimulationUI extends JFrame {
         );
         XYPlot plot = chart.getXYPlot();
         NumberAxis range = (NumberAxis) plot.getRangeAxis();
-        range.setRange(0.0, 100.0);
+        range.setRange(0.0, 105.0);
         range.setAutoRange(false);
+        chart.setBackgroundPaint(SPACE_PANEL);
+        chart.getTitle().setPaint(SPACE_TEXT);
+        plot.setBackgroundPaint(SPACE_INPUT);
+        plot.setDomainGridlinePaint(new Color(88, 98, 150));
+        plot.setRangeGridlinePaint(new Color(88, 98, 150));
+        plot.getDomainAxis().setLabelPaint(SPACE_TEXT);
+        plot.getDomainAxis().setTickLabelPaint(SPACE_MUTED);
+        plot.getRangeAxis().setLabelPaint(SPACE_TEXT);
+        plot.getRangeAxis().setTickLabelPaint(SPACE_MUTED);
+        plot.getRenderer().setSeriesPaint(0, SPACE_ACCENT);
 
         ChartPanel chartPanel = new ChartPanel(chart);
         chartPanel.setDomainZoomable(false);
         chartPanel.setRangeZoomable(false);
         chartPanel.setPreferredSize(new Dimension(800, 220));
+        chartPanel.setBackground(SPACE_PANEL);
+        chartPanel.setOpaque(true);
 
         JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setBorder(BorderFactory.createTitledBorder("Real-time Memory Utilization"));
+        TitledBorder tb = BorderFactory.createTitledBorder("Real-time Memory Utilization");
+        tb.setTitleColor(SPACE_TEXT);
+        wrapper.setBorder(tb);
+        wrapper.setBackground(SPACE_PANEL);
+        wrapper.setOpaque(true);
         wrapper.add(chartPanel, BorderLayout.CENTER);
         return wrapper;
     }
@@ -344,12 +486,12 @@ public class MainSimulationUI extends JFrame {
 
         JPanel bottom = new JPanel(new GridLayout(1, 2, 8, 8));
         bottom.add(wrapTable("Terminated", new JTable(terminatedModel)));
-
-        JSplitPane side = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        side.setResizeWeight(0.15);
-        side.setTopComponent(new JLabel("Log"));
-        side.setBottomComponent(new JScrollPane(logArea));
-        bottom.add(side);
+        JPanel logPanel = new JPanel(new BorderLayout(0, 6));
+        JLabel logLabel = new JLabel("Log");
+        logLabel.setBorder(BorderFactory.createEmptyBorder(0, 2, 0, 0));
+        logPanel.add(logLabel, BorderLayout.NORTH);
+        logPanel.add(new JScrollPane(logArea), BorderLayout.CENTER);
+        bottom.add(logPanel);
 
         panel.add(bottom);
         return panel;
@@ -367,15 +509,67 @@ public class MainSimulationUI extends JFrame {
                 true,
                 false
         );
+        XYPlot plot = chart.getXYPlot();
+        NumberAxis range = (NumberAxis) plot.getRangeAxis();
+        range.setRange(0.0, 105.0);
+        range.setAutoRange(false);
+        chart.setBackgroundPaint(SPACE_PANEL);
+        chart.getTitle().setPaint(SPACE_TEXT);
+        plot.setBackgroundPaint(SPACE_INPUT);
+        plot.setDomainGridlinePaint(new Color(88, 98, 150));
+        plot.setRangeGridlinePaint(new Color(88, 98, 150));
+        plot.getDomainAxis().setLabelPaint(SPACE_TEXT);
+        plot.getDomainAxis().setTickLabelPaint(SPACE_MUTED);
+        plot.getRangeAxis().setLabelPaint(SPACE_TEXT);
+        plot.getRangeAxis().setTickLabelPaint(SPACE_MUTED);
+        plot.getRenderer().setSeriesPaint(0, SPACE_ACCENT_2);
 
         ChartPanel chartPanel = new ChartPanel(chart);
         chartPanel.setDomainZoomable(false);
         chartPanel.setRangeZoomable(false);
+        chartPanel.setBackground(SPACE_PANEL);
+        chartPanel.setOpaque(true);
 
         JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setBorder(BorderFactory.createTitledBorder("Real-time CPU Utilization"));
+        TitledBorder tb = BorderFactory.createTitledBorder("Real-time CPU Utilization");
+        tb.setTitleColor(SPACE_TEXT);
+        wrapper.setBorder(tb);
+        wrapper.setBackground(SPACE_PANEL);
+        wrapper.setOpaque(true);
         wrapper.add(chartPanel, BorderLayout.CENTER);
         return wrapper;
+    }
+
+    private JButton createRoundedActionButton(String text) {
+        return new JButton(text) {
+            {
+                putClientProperty("roundedAction", Boolean.TRUE);
+                setForeground(Color.WHITE);
+                setFocusPainted(false);
+                setBorderPainted(false);
+                setContentAreaFilled(false);
+                setOpaque(false);
+            }
+
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                Color fill = getModel().isArmed() ? new Color(74, 48, 150) : new Color(92, 63, 176);
+                g2.setColor(fill);
+                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+                g2.setColor(new Color(129, 102, 214));
+                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 18, 18);
+                g2.dispose();
+                super.paintComponent(g);
+            }
+
+            @Override
+            protected void paintBorder(Graphics g) {
+                // painted in paintComponent
+            }
+        };
     }
 
     private JPanel buildBottomPanel() {
@@ -389,7 +583,9 @@ public class MainSimulationUI extends JFrame {
     private JScrollPane wrapTable(String title, JTable table) {
         table.setFillsViewportHeight(true);
         JScrollPane scroll = new JScrollPane(table);
-        scroll.setBorder(BorderFactory.createTitledBorder(title));
+        TitledBorder tb = BorderFactory.createTitledBorder(new LineBorder(SPACE_ACCENT, 1), title);
+        tb.setTitleColor(SPACE_TEXT);
+        scroll.setBorder(tb);
         return scroll;
     }
 
@@ -568,6 +764,16 @@ public class MainSimulationUI extends JFrame {
         metricsCycleLabel.setText("Cycle: " + tick);
         runningLabel.setText("Running: " + (running == null ? "-" : running.getPid()));
         modeLabel.setText("Mode: " + (running == null ? "SO/IDLE" : "USER"));
+        if (running == null) {
+            missionRunningProcessLabel.setText("-");
+            missionRunningDeadlineLabel.setText("DeadlineRem: -");
+        } else {
+            missionRunningProcessLabel.setText(running.getPid());
+            int deadlineRem = running.getDeadlineRemaining(tick);
+            missionRunningDeadlineLabel.setText(
+                    "DeadlineRem: " + (deadlineRem == Integer.MAX_VALUE ? "-" : String.valueOf(deadlineRem))
+            );
+        }
 
         int totalTicks = cpu.getTotalTicksSnapshot();
         int busyTicks = cpu.getBusyTicksSnapshot();
@@ -644,6 +850,135 @@ public class MainSimulationUI extends JFrame {
     private void log(String msg) {
         logArea.append(msg + "\n");
         logArea.setCaretPosition(logArea.getDocument().getLength());
+    }
+
+    private void applySpaceTheme() {
+        getContentPane().setBackground(SPACE_BG);
+        styleRecursively(getContentPane());
+        repaint();
+    }
+
+    private void styleRecursively(java.awt.Component c) {
+        if (c instanceof JPanel) {
+            c.setBackground(SPACE_PANEL);
+            c.setForeground(SPACE_TEXT);
+        } else if (c instanceof JLabel) {
+            c.setForeground(SPACE_TEXT);
+        } else if (c instanceof JTextField) {
+            JTextField tf = (JTextField) c;
+            tf.setBackground(SPACE_INPUT);
+            tf.setForeground(SPACE_TEXT);
+            tf.setCaretColor(SPACE_TEXT);
+            tf.setBorder(new LineBorder(SPACE_ACCENT_2, 1));
+        } else if (c instanceof JTextArea) {
+            JTextArea ta = (JTextArea) c;
+            ta.setBackground(SPACE_INPUT);
+            ta.setForeground(SPACE_TEXT);
+            ta.setCaretColor(SPACE_TEXT);
+            ta.setBorder(new LineBorder(SPACE_ACCENT_2, 1));
+        } else if (c instanceof JComboBox) {
+            @SuppressWarnings("rawtypes")
+            JComboBox cb = (JComboBox) c;
+            cb.setBackground(SPACE_INPUT);
+            cb.setForeground(SPACE_TEXT);
+            cb.setOpaque(true);
+            cb.setBorder(new LineBorder(SPACE_ACCENT_2, 1, true));
+            cb.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public java.awt.Component getListCellRendererComponent(
+                        javax.swing.JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                    java.awt.Component comp = super.getListCellRendererComponent(
+                            list, value, index, isSelected, cellHasFocus);
+                    if (isSelected) {
+                        comp.setBackground(new Color(91, 33, 182));
+                        comp.setForeground(Color.WHITE);
+                    } else {
+                        comp.setBackground(SPACE_INPUT);
+                        comp.setForeground(SPACE_TEXT);
+                    }
+                    return comp;
+                }
+            });
+            cb.setUI(new BasicComboBoxUI() {
+                @Override
+                protected JButton createArrowButton() {
+                    JButton arrow = new JButton("▼");
+                    arrow.setForeground(SPACE_TEXT);
+                    arrow.setBackground(SPACE_INPUT);
+                    arrow.setBorder(new LineBorder(SPACE_ACCENT_2, 1, true));
+                    arrow.setFocusPainted(false);
+                    return arrow;
+                }
+
+                @Override
+                public void paintCurrentValueBackground(Graphics g, Rectangle bounds, boolean hasFocus) {
+                    g.setColor(SPACE_INPUT);
+                    g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+                }
+            });
+        } else if (c instanceof JCheckBox) {
+            JCheckBox cb = (JCheckBox) c;
+            cb.setBackground(SPACE_PANEL);
+            cb.setForeground(SPACE_TEXT);
+        } else if (c instanceof JButton) {
+            JButton b = (JButton) c;
+            Object rounded = b.getClientProperty("roundedAction");
+            Object emergency = b.getClientProperty("emergencyButton");
+            if (!Boolean.TRUE.equals(emergency) && (rounded == null || !Boolean.TRUE.equals(rounded))) {
+                b.setBackground(SPACE_ACCENT);
+                b.setForeground(SPACE_BG);
+                b.setFocusPainted(false);
+                b.setBorder(new LineBorder(new Color(221, 214, 254), 1, true));
+                b.setOpaque(true);
+                b.setContentAreaFilled(true);
+            }
+        } else if (c instanceof JTable) {
+            JTable t = (JTable) c;
+            t.setBackground(SPACE_INPUT);
+            t.setForeground(SPACE_TEXT);
+            t.setOpaque(true);
+            t.setGridColor(new Color(88, 98, 150));
+            t.setSelectionBackground(new Color(91, 33, 182));
+            t.setSelectionForeground(Color.WHITE);
+            t.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+                @Override
+                public java.awt.Component getTableCellRendererComponent(
+                        JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    java.awt.Component comp = super.getTableCellRendererComponent(
+                            table, value, isSelected, hasFocus, row, column);
+                    if (isSelected) {
+                        comp.setBackground(new Color(91, 33, 182));
+                        comp.setForeground(Color.WHITE);
+                    } else {
+                        comp.setBackground(SPACE_INPUT);
+                        comp.setForeground(SPACE_TEXT);
+                    }
+                    return comp;
+                }
+            });
+            if (t.getTableHeader() != null) {
+                t.getTableHeader().setBackground(new Color(35, 47, 94));
+                t.getTableHeader().setForeground(SPACE_TEXT);
+            }
+        } else if (c instanceof JScrollPane) {
+            JScrollPane sp = (JScrollPane) c;
+            sp.setBackground(SPACE_PANEL);
+            sp.getViewport().setBackground(SPACE_INPUT);
+            sp.getViewport().setOpaque(true);
+        } else if (c instanceof ChartPanel) {
+            c.setBackground(SPACE_PANEL);
+            c.setForeground(SPACE_TEXT);
+            ((ChartPanel) c).setOpaque(true);
+        } else if (c instanceof JSplitPane) {
+            c.setBackground(SPACE_PANEL);
+        }
+
+        if (c instanceof java.awt.Container) {
+            java.awt.Component[] children = ((java.awt.Container) c).getComponents();
+            for (int i = 0; i < children.length; i++) {
+                styleRecursively(children[i]);
+            }
+        }
     }
 
     public static void main(String[] args) {
