@@ -15,15 +15,40 @@ import proyecto1so.scheduler.RoundRobinStrategy;
 import proyecto1so.scheduler.SRTStrategy;
 import proyecto1so.scheduler.SchedulerStrategy;
 
+/**
+ * Scheduler de un CPU para una simulación de un "satelite".
+ *
+ * Que hace en resumen:
+ * mantiene colas típicas del sistema operativo: READY, BLOCKED y sus SUSPENDED.
+ * administra llegadas por tick mediante una cola ordenada.
+ * ejecuta un proceso por tick según una estrategia (roundrobin, FCFS entre otras).
+ * permite preempción.
+ * simula interrupciones "externas".
+ * simula eventos de I/O que bloquean al proceso y luego lo regresan a READY.
+ * limita cuantos procesos pueden estar “en RAM” (simula swap in/out).
+ *
+ * tratado de la concurrencia
+ * el reloj (onTick) y los triggers (I/O e interrupciones) pueden pasar “al mismo tiempo”.
+ * se usa un mutex (semaforo) para que las colas/estado no queden inconsistentes.
+ */
 public class CPUScheduler implements ClockListener {
 
+    // semaforo (llamado mutex) para proteger estado compartido
     private final Semaphore mutex = new Semaphore(1, true);
 
+    // colas de procesos
     private final Queue<Process> readyQueue = new Queue<>();
+
+
     private final Queue<Process> blockedQueue = new Queue<>();
+
+  
     private final Queue<Process> readySuspendedQueue = new Queue<>();
+
     private final Queue<Process> blockedSuspendedQueue = new Queue<>();
 
+    //procesos que llegan con un arrival time.
+    
     private final OrderedQueue<Process> pendingArrivals =
             new OrderedQueue<>(new Compare<Process>() {
                 @Override
@@ -32,42 +57,75 @@ public class CPUScheduler implements ClockListener {
                 }
             });
 
+    //listas de procesos que ya terminaron
     private final SingleLinkedList<Process> finished = new SingleLinkedList<>();
 
+    //estrategia de schedule
     private SchedulerStrategy strategy = new RoundRobinStrategy(2);
+
+    //proceso que esta running
     private Process currentProcess = null;
+
     private int quantumLeft = 0;
 
+    // limite de procesos que pueden estar en RAM a la vez
     private final int maxInRam;
+
+    //politica para swapout
     private final SuspensionPolicy suspensionPolicy;
+
+ 
+    //para metricas de la RAM
     private int inRamCount = 0;
+
+
     private int totalSuspensions = 0;
+
+
     private int totalSwapIns = 0;
 
+
     private int totalTicks = 0;
+
     private int busyTicks = 0;
 
-    // EDF metrics
+    // Para metricas de deadlines
     private int deadlinesMet = 0;
     private int deadlinesMissed = 0;
 
-    // Interrupt handling metrics/state
+    // Ahora la parte de interrupciones
     private boolean interruptInProgress = false;
+
+
     private int interruptTicksLeft = 0;
+
+
     private String interruptName = null;
+
+
     private int totalInterrupts = 0;
+
+
     private int interruptPreemptions = 0;
+
+
     private int isrBusyTicks = 0;
 
-    // I/O metrics/state
     private int tickDurationMs = 300;
+
+
     private int ioEventsRequested = 0;
+
+
     private int ioEventsCompleted = 0;
 
+    
     public CPUScheduler() {
         this(Integer.MAX_VALUE, SuspensionPolicy.LOWEST_PRIORITY);
     }
 
+    //constructor principal 
+   
     public CPUScheduler(int maxInRam, SuspensionPolicy suspensionPolicy) {
         this.maxInRam = maxInRam <= 0 ? Integer.MAX_VALUE : maxInRam;
         this.suspensionPolicy = suspensionPolicy == null
@@ -75,14 +133,17 @@ public class CPUScheduler implements ClockListener {
                 : suspensionPolicy;
     }
 
+    //para cambiar la estrategia de schedule
     public void setStrategy(SchedulerStrategy strategy) {
         if (strategy != null) this.strategy = strategy;
     }
 
+    //cuantos milisegundas dura el tick
     public void setTickDurationMs(int tickDurationMs) {
         if (tickDurationMs > 0) this.tickDurationMs = tickDurationMs;
     }
 
+    //para agregar processos a la simulacion
     public void addProcess(Process p) {
         if (p == null) return;
 
@@ -100,6 +161,7 @@ public class CPUScheduler implements ClockListener {
         pendingArrivals.insertOrdered(p);
     }
 
+    // aqui es donde se generan interrupciones "externas" 
     public boolean triggerExternalInterrupt(String name, int isrTicks) {
         if (isrTicks <= 0) return false;
         String resolvedName = (name == null || name.isBlank()) ? "EXT-IRQ" : name;
@@ -133,6 +195,7 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+    //simulación de interrupciones internas, despues se llama para que ocurra de manera aleatoria
     public boolean triggerIOEvent(String reason, int serviceTicks) {
         if (serviceTicks <= 0) return false;
         String resolvedReason = (reason == null || reason.isBlank()) ? "IO" : reason;
@@ -166,6 +229,7 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+    //parte de snapshot, se usa para poder ver todo en la interfaz
     public Process getCurrentProcessSnapshot() {
         boolean acquired = false;
         try {
@@ -179,14 +243,17 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+   
     public Process[] snapshotReadyQueue() {
         return snapshotQueue(readyQueue);
     }
 
+  
     public Process[] snapshotBlockedQueue() {
         return snapshotQueue(blockedQueue);
     }
 
+    
     public Process[] snapshotReadySuspendedQueue() {
         return snapshotQueue(readySuspendedQueue);
     }
@@ -302,6 +369,20 @@ public class CPUScheduler implements ClockListener {
         return maxInRam;
     }
 
+    /**
+     * Importante aca esta el tick principal de la simulación
+     *
+     * actualiza el totalclicks
+     * Mete a READY/READY_SUSPENDED los procesos que ya llegan.
+     * Hace swap-in si hay espacio en RAM y hay suspendidos esperando.
+     * Si hay una interrupción (ISR), consume 1 tick de ISR y sale.
+     * Si la estrategia es preemptiva, revisa si hay alguien “mejor” en READY que el RUNNING.
+     * Si no hay proceso corriendo, pide a la estrategia el próximo.
+     * Ejecuta 1 tick del proceso: consume CPU, maneja quantum y finalización.
+     *
+     * Concurrencia:
+     * - Todo el método está bajo mutex.
+     */
     @Override
     public void onTick(int tick) {
         boolean acquired = false;
@@ -396,6 +477,7 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+  
     private void admitArrivingProcess(Process arriving, int tick) {
         if (arriving == null) return;
 
@@ -424,6 +506,10 @@ public class CPUScheduler implements ClockListener {
                 + " va a READY_SUSPENDED");
     }
 
+    /**
+     * Snapshot genérico de una cola FIFO sin romper el orden final.
+     * Se usa para la UI/monitor de colas.
+     */
     private Process[] snapshotQueue(Queue<Process> q) {
         boolean acquired = false;
         try {
@@ -488,6 +574,13 @@ public class CPUScheduler implements ClockListener {
         return false;
     }
 
+    /**
+     * Intenta traer (swap in) un proceso suspendido si hay cupo.
+     *
+     * Prioriza:
+     * - READY_SUSPENDED -> READY
+     * - luego BLOCKED_SUSPENDED -> BLOCKED
+     */
     private boolean swapInOneIfPossible() {
         if (inRamCount >= maxInRam) return false;
 
@@ -516,6 +609,7 @@ public class CPUScheduler implements ClockListener {
         return false;
     }
 
+    
     private Process pickVictimFromQueue(Queue<Process> q) {
         if (q == null || q.isEmpty()) return null;
 
@@ -548,6 +642,7 @@ public class CPUScheduler implements ClockListener {
         return victim;
     }
 
+  
     private boolean isWorseForRam(Process a, Process b) {
         if (a == null) return false;
         if (b == null) return true;
@@ -568,6 +663,7 @@ public class CPUScheduler implements ClockListener {
         }
     }
 
+  
     private boolean shouldPreempt(Process current) {
         if (readyQueue.isEmpty()) return false;
 
@@ -589,6 +685,9 @@ public class CPUScheduler implements ClockListener {
         return false;
     }
 
+    /**
+     * Busca el “mejor” proceso por prioridad dentro de READY sin cambiar el orden final.
+     */
     private Process peekBestByPriority() {
         SingleLinkedList<Process> temp = new SingleLinkedList<>();
         Process best = null;
@@ -603,11 +702,13 @@ public class CPUScheduler implements ClockListener {
         return best;
     }
 
+
     private boolean isPriorityBetter(Process a, Process b) {
         int diff = a.getPriority() - b.getPriority();
         if (diff != 0) return diff < 0;
         return a.getPid().compareTo(b.getPid()) < 0;
     }
+
 
     private Process peekBestByRemaining() {
         SingleLinkedList<Process> temp = new SingleLinkedList<>();
@@ -623,11 +724,13 @@ public class CPUScheduler implements ClockListener {
         return best;
     }
 
+
     private boolean isRemainingBetter(Process a, Process b) {
         int diff = a.getRemainingTime() - b.getRemainingTime();
         if (diff != 0) return diff < 0;
         return a.getPid().compareTo(b.getPid()) < 0;
     }
+
 
     private Process peekBestByDeadline() {
         SingleLinkedList<Process> temp = new SingleLinkedList<>();
@@ -643,6 +746,7 @@ public class CPUScheduler implements ClockListener {
         return best;
     }
 
+
     private boolean isDeadlineBetter(Process a, Process b) {
         int da = a.getDeadlineTick();
         int db = b.getDeadlineTick();
@@ -650,6 +754,8 @@ public class CPUScheduler implements ClockListener {
         return a.getPid().compareTo(b.getPid()) < 0;
     }
 
+   //reporte de las metricas en terminal 
+    
     public void printReport() {
         System.out.println("\n================= REPORT =================");
 
@@ -734,6 +840,7 @@ public class CPUScheduler implements ClockListener {
         System.out.println("==========================================\n");
     }
 
+  
     private void completeIO(Process process, String reason, int serviceTicks) {
         boolean acquired = false;
         try {
@@ -786,6 +893,7 @@ public class CPUScheduler implements ClockListener {
         while (!temp.isEmpty()) q.enqueue(temp.removeFirst());
         return removed;
     }
+
 
     private class IOCompletionWorker extends Thread {
         private final Process process;

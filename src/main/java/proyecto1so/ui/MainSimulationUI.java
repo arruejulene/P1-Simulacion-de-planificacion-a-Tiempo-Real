@@ -612,6 +612,12 @@ public class MainSimulationUI extends JFrame {
 
     private void startSimulation() {
         if (started) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Simulation ongoing.",
+                    "Start Warning",
+                    JOptionPane.WARNING_MESSAGE
+            );
             log("[START] Simulation already running");
             return;
         }
@@ -619,14 +625,30 @@ public class MainSimulationUI extends JFrame {
             return;
         }
         if (clockStartedOnce) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "User has to reset engine before starting.",
+                    "Start Warning",
+                    JOptionPane.WARNING_MESSAGE
+            );
             log("[START] Clock thread cannot be restarted. Use Reset Engine first.");
             return;
         }
 
         int loadedCount = 0;
+        boolean jsonUnavailableOrInvalid = false;
         if (useJsonCheck.isSelected()) {
             LoadResult result = loadProcessesFromJson(jsonPathField.getText());
             loadedCount = result.getProcesses().length;
+            jsonUnavailableOrInvalid = loadedCount == 0 && result.getErrors().length > 0;
+            if (jsonUnavailableOrInvalid) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "JSON file unavaliable or invalid. Simulation will generate random processes.",
+                        "JSON Warning",
+                        JOptionPane.WARNING_MESSAGE
+                );
+            }
         } else {
             log("[START] JSON disabled by user");
         }
@@ -643,7 +665,7 @@ public class MainSimulationUI extends JFrame {
 
         applySelectedStrategy();
         clock.start();
-        ioGenerator = new IOEventGenerator(cpu, 700, 1500, 1, 3, randomSeed ^ 0x13579BDFL);
+        ioGenerator = new IOEventGenerator(cpu, 500, 1200, 1, 3, randomSeed ^ 0x13579BDFL);
         ioGenerator.start();
         started = true;
         clockStartedOnce = true;
@@ -709,6 +731,12 @@ public class MainSimulationUI extends JFrame {
     private void generateRandomBatch() {
         int count = 20;
         addRandomProcesses(count);
+        JOptionPane.showMessageDialog(
+                this,
+                "Success: 20 random processes added to queue.",
+                "Success",
+                JOptionPane.INFORMATION_MESSAGE
+        );
         log("[RANDOM] Added processes: " + count);
     }
 
@@ -785,8 +813,23 @@ public class MainSimulationUI extends JFrame {
         double memUtil = maxInRam <= 0 ? 0.0 : (100.0 * inRam / maxInRam);
         int totalDeadline = met + missed;
         double deadlineRate = totalDeadline <= 0 ? 0.0 : (100.0 * met / totalDeadline);
-        kpiLabel.setText(String.format("CPU Util: %.2f%% | Deadline success: %.2f%% (%d/%d)",
-                util, deadlineRate, met, totalDeadline));
+        int terminatedCount = done.length;
+        double throughput = totalTicks <= 0 ? 0.0 : ((double) terminatedCount / (double) totalTicks);
+        double avgResponse = 0.0;
+        if (terminatedCount > 0) {
+            double sumResponse = 0.0;
+            for (int i = 0; i < terminatedCount; i++) {
+                Process p = done[i];
+                int firstRun = p.getFirstRunTick() == null ? p.getArrivalTime() : p.getFirstRunTick();
+                sumResponse += (firstRun - p.getArrivalTime());
+            }
+            avgResponse = sumResponse / terminatedCount;
+        }
+
+        kpiLabel.setText(String.format(
+                "CPU Util: %.2f%% | Deadline success: %.2f%% (%d/%d) | Throughput: %.4f processes/tick | Avg Response: %.2f ticks",
+                util, deadlineRate, met, totalDeadline, throughput, avgResponse
+        ));
 
         if (tick != lastCpuUtilTickPlotted) {
             cpuUtilSeries.add(tick, util);
