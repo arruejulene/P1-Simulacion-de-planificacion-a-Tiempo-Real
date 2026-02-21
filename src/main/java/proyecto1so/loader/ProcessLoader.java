@@ -4,7 +4,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.InputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import proyecto1so.datastructures.SingleLinkedList;
@@ -21,13 +23,12 @@ public class ProcessLoader {
         SingleLinkedList<String> errors = new SingleLinkedList<>();
 
         try {
-            Path path = Path.of(filePath);
-            if (!Files.exists(path)) {
-                errors.addLast("JSON file does not exist: " + filePath);
+            String content = readJsonContent(filePath);
+            if (content == null) {
+                errors.addLast("JSON file does not exist (filesystem/classpath): " + filePath);
                 return toResult(processes, errors);
             }
 
-            String content = Files.readString(path);
             JsonElement root = JsonParser.parseString(content);
             if (!root.isJsonArray()) {
                 errors.addLast("JSON root must be an array");
@@ -53,6 +54,25 @@ public class ProcessLoader {
         }
 
         return toResult(processes, errors);
+    }
+
+    private String readJsonContent(String filePath) throws IOException {
+        Path path = Path.of(filePath);
+        if (Files.exists(path)) {
+            return Files.readString(path);
+        }
+
+        String classpathPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) cl = ProcessLoader.class.getClassLoader();
+
+        InputStream in = cl.getResourceAsStream(classpathPath);
+        if (in == null) return null;
+
+        try (InputStream resourceStream = in) {
+            byte[] bytes = resourceStream.readAllBytes();
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
     }
 
     private Process parseJsonObject(JsonObject o, int index, SingleLinkedList<String> errors) {
